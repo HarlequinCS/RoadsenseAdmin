@@ -1,26 +1,109 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-asphalt-950: #12151b;
+  --color-asphalt-900: #191d25;
+  --color-asphalt-800: #232833;
+  --color-asphalt-700: #2f3542;
+  --color-asphalt-600: #3d4552;
+
+  --color-amber-50: #fdf3e0;
+  --color-amber-100: #faeeda;
+  --color-amber-400: #f2a93b;
+  --color-amber-500: #ef9f27;
+  --color-amber-600: #ba7517;
+  --color-amber-900: #412402;
+
+  --color-signal-red-50: #fcebeb;
+  --color-signal-red-100: #f7c1c1;
+  --color-signal-red-500: #e4572e;
+  --color-signal-red-600: #a32d2d;
+
+  --color-signal-teal-50: #e1f5ee;
+  --color-signal-teal-100: #9fe1cb;
+  --color-signal-teal-500: #12805c;
+  --color-signal-teal-600: #085041;
+
+  --color-signal-blue-50: #e6f1fb;
+  --color-signal-blue-100: #b5d4f4;
+  --color-signal-blue-500: #3d6fb4;
+  --color-signal-blue-600: #0c447c;
+
+  --color-fog-50: #f7f6f3;
+  --color-fog-100: #efeee8;
+  --color-fog-200: #ddd9d0;
+  --color-fog-400: #9b9890;
+  --color-fog-600: #5c5a56;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-space-grotesk);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-fog-50);
+  color: var(--color-asphalt-950);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--color-asphalt-950);
+    color: var(--color-fog-100);
+  }
+}
+
+.lane-divider {
+  height: 3px;
+  border-radius: 2px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--color-amber-400) 0px,
+    var(--color-amber-400) 20px,
+    transparent 20px,
+    transparent 36px
+  );
+}
+
+.lane-divider-vertical {
+  width: 3px;
+  border-radius: 2px;
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--color-amber-400) 0px,
+    var(--color-amber-400) 12px,
+    transparent 12px,
+    transparent 22px
+  );
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-fog-200);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-amber-400);
+  outline-offset: 2px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
 }

@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RoadSense Admin — Upgraded UI Files
 
-## Getting Started
+## What's new vs v1
 
-First, run the development server:
+### Dashboard page
+- Animated number counters (stat cards count up when data loads)
+- Recharts integration — Bar chart (hazard by type) + Pie chart (by status)
+- Hover-to-click table rows that navigate to report detail
+- Live search on recent reports
+- Spinning refresh button with last-updated timestamp
+- Delta badges on stat cards ("+12%", "Active", "90%")
 
+### Sidebar
+- Live badge on Reports link showing count of "New" reports from Firestore
+- Role subtitle under username
+- Sign out button with hover danger state
+- Sticky positioning so it stays visible while scrolling
+
+### Report Table
+- Tab bar (All / New / Under Investigation / Resolved) with live counts
+- Type filter dropdown built from actual Firestore data
+- Skeleton loading rows while data fetches
+- Actions (View / Delete) hidden until row hover
+- Toast notification on status change and delete
+- Result count display ("X reports")
+
+## Install extra dependency (recharts)
+```bash
+npm install recharts
+```
+(firebase and @tabler/icons-react already installed from v1)
+
+## How to apply
+
+Copy these files into your project, replacing the originals:
+
+| File in zip | Destination in your project |
+|---|---|
+| `app/dashboard/page.tsx` | `app/(dashboard)/dashboard/page.tsx` |
+| `components/Sidebar.tsx` | `components/Sidebar.tsx` |
+| `components/ReportTable.tsx` | `components/ReportTable.tsx` |
+
+Then restart:
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
