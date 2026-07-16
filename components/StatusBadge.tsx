@@ -1,5 +1,5 @@
 import { HazardStatus } from "@/lib/types";
-import { statusStyles } from "@/lib/style-helpers";
+import { statusStyles, statusLabels } from "@/lib/style-helpers";
 
 export default function StatusBadge({ status }: { status: HazardStatus }) {
   const { bg, fg } = statusStyles[status];
@@ -7,8 +7,9 @@ export default function StatusBadge({ status }: { status: HazardStatus }) {
     <span
       className="text-xs px-2.5 py-1 rounded-md font-medium"
       style={{ backgroundColor: bg, color: fg }}
+      title={status}
     >
-      {status}
+      {statusLabels[status]}
     </span>
   );
 }

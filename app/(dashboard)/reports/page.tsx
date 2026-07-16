@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import ReportTable from "@/components/ReportTable";
 
 export default function ReportsPage() {
@@ -15,7 +16,9 @@ export default function ReportsPage() {
         </p>
       </div>
       <div className="lane-divider w-full mb-6" />
-      <ReportTable />
+      <Suspense fallback={<div className="h-40 rounded-xl bg-fog-100 dark:bg-asphalt-800 animate-pulse" />}>
+        <ReportTable />
+      </Suspense>
     </div>
   );
 }

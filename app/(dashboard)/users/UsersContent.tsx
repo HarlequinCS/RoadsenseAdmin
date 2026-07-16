@@ -12,6 +12,7 @@ import StatCard from "@/components/StatCard";
 import ContributorBadgePill from "@/components/ContributorBadge";
 import StatusBadge from "@/components/StatusBadge";
 import RiskBadge from "@/components/RiskBadge";
+import EmptyState from "@/components/EmptyState";
 import { formatDate } from "@/lib/style-helpers";
 import {
   IconSearch, IconUsers, IconFileText,
@@ -97,7 +98,7 @@ export default function UsersContent() {
       </div>
       <div className="lane-divider w-full mb-6" />
 
-      <div className="grid grid-cols-4 gap-3.5 mb-7">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-7">
         <StatCard label="Total users" value={users.length} icon={<IconUsers size={15} />} tone="info" />
         <StatCard label="Total reports" value={totalReports} icon={<IconFileText size={15} />} tone="default" />
         <StatCard label="Total resolved" value={totalResolved} icon={<IconCircleCheck size={15} />} tone="success" />
@@ -161,10 +162,11 @@ export default function UsersContent() {
                   ))}
                 </tr>
               ))}
-            {!loading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-fog-400 text-xs">No users found</td>
-              </tr>
+            {!loading && users.length === 0 && (
+              <tr><td colSpan={6}><EmptyState variant="no-data" title="No users yet" description="Users will appear when they register on the mobile app." /></td></tr>
+            )}
+            {!loading && users.length > 0 && filtered.length === 0 && (
+              <tr><td colSpan={6}><EmptyState variant="no-results" /></td></tr>
             )}
             {!loading && filtered.map((u) => {
               const badge = u.contributorBadge || getContributorBadge((u.totalReports || 0) + (u.resolvedReports || 0));
@@ -222,8 +224,8 @@ export default function UsersContent() {
                           )}
                           {u.fcmToken && (
                             <div className="col-span-2">
-                              <p className="text-[10px] text-fog-400 mb-0.5">FCM token (last device)</p>
-                              <p className="font-mono text-[10px] text-fog-500 truncate">{u.fcmToken.slice(0, 40)}…</p>
+                              <p className="text-[10px] text-fog-400 mb-0.5">Push notifications</p>
+                              <p className="text-[10px] text-signal-teal-600 dark:text-signal-teal-100">Registered</p>
                             </div>
                           )}
                         </div>

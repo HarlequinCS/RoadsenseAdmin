@@ -11,10 +11,12 @@ import { formatDate, formatDateTime } from "@/lib/style-helpers";
 import { normalizeHazard, normalizeUser } from "@/lib/firestore-helpers";
 import { findPotentialDuplicates } from "@/lib/hazard-utils";
 import { saveHazardAndSyncStats, deleteHazard, saveAdminNotes } from "@/lib/hazard-service";
+import { exportReportText } from "@/lib/export-utils";
 import { getCloudinaryThumbnail } from "@/lib/cloudinary";
 import StatusBadge from "@/components/StatusBadge";
 import RiskBadge from "@/components/RiskBadge";
 import ContributorBadgePill from "@/components/ContributorBadge";
+import AiTriagePanel from "@/components/AiTriagePanel";
 import {
   IconPrinter, IconDownload, IconArrowLeft, IconTrash, IconAlertTriangle,
 } from "@tabler/icons-react";
@@ -99,10 +101,25 @@ export default function ReportDetailPage() {
       id,
       { status, hazardType, description },
       report.userId,
-      adminUser.uid
+      adminUser.uid,
+      {
+        adminUid: adminUser.uid,
+        adminEmail: adminUser.email ?? undefined,
+        hazardId: id,
+        hazardType: report.hazardType,
+        reporterName: report.reporterName,
+        previousStatus: report.status,
+        newStatus: status,
+      }
     );
     if (adminNotes !== (report.adminNotes || "")) {
-      await saveAdminNotes(id, adminNotes, adminUser.uid);
+      await saveAdminNotes(id, adminNotes, adminUser.uid, {
+        adminUid: adminUser.uid,
+        adminEmail: adminUser.email ?? undefined,
+        hazardId: id,
+        hazardType: report.hazardType,
+        reporterName: report.reporterName,
+      });
     }
     setReport({ ...report, status, hazardType, description, adminNotes });
     setSaving(false);
@@ -110,8 +127,14 @@ export default function ReportDetailPage() {
   }
 
   async function handleDelete() {
-    if (!report || !confirm("Delete this hazard report permanently?")) return;
-    await deleteHazard(id, report.userId);
+    if (!report || !adminUser || !confirm("Delete this hazard report permanently?")) return;
+    await deleteHazard(id, report.userId, {
+      adminUid: adminUser.uid,
+      adminEmail: adminUser.email ?? undefined,
+      hazardId: id,
+      hazardType: report.hazardType,
+      reporterName: report.reporterName,
+    });
     router.push("/reports");
   }
 
@@ -125,28 +148,20 @@ export default function ReportDetailPage() {
 
   function handleDownload() {
     if (!report) return;
-    const lines = [
-      `RoadSense Hazard Report`,
-      `========================`,
-      `Report ID: ${report.id}`,
-      `Reporter: ${report.reporterName}`,
-      `Hazard Type: ${report.hazardType}`,
-      `Risk Level: ${report.riskLevel}`,
-      `Description: ${report.description}`,
-      `Location: ${address || "—"}`,
-      `Coordinates: ${report.latitude}, ${report.longitude}`,
-      `Status: ${report.status}`,
-      `Verifications: ${report.verificationCount}`,
-      `Date submitted: ${formatDate(report.createdAt)}`,
-      `Admin notes: ${report.adminNotes || "—"}`,
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `roadsense-report-${report.id.slice(0, 8)}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+    exportReportText({
+      id: report.id,
+      reporterName: report.reporterName,
+      hazardType: report.hazardType,
+      riskLevel: report.riskLevel,
+      description: report.description,
+      latitude: report.latitude,
+      longitude: report.longitude,
+      status: report.status,
+      verificationCount: report.verificationCount,
+      createdAt: formatDate(report.createdAt),
+      adminNotes: report.adminNotes,
+      address,
+    });
   }
 
   if (!report) return <p className="text-sm text-fog-600 dark:text-fog-400">Loading report…</p>;
@@ -293,8 +308,30 @@ export default function ReportDetailPage() {
           </div>
         </div>
 
-        {reporter && (
-          <div className="border border-fog-200 dark:border-asphalt-800 bg-white dark:bg-asphalt-900 rounded-xl p-5 text-sm h-fit">
+        <div className="space-y-4">
+          <AiTriagePanel
+            adminUser={adminUser}
+            hazard={{
+              id: report.id,
+              hazardType: report.hazardType,
+              description: report.description,
+              riskLevel: report.riskLevel,
+              status: report.status,
+              reporterName: report.reporterName,
+              latitude: report.latitude,
+              longitude: report.longitude,
+              verificationCount: report.verificationCount,
+              address,
+              duplicateCount: duplicates.length,
+              reporterTotalReports: reporter?.totalReports,
+              reporterBadge: reporter?.contributorBadge,
+              imageUrl: report.imageUrl,
+            }}
+            onInsertNote={(note) => setAdminNotes((prev) => (prev ? `${prev}\n\n${note}` : note))}
+          />
+
+          {reporter && (
+            <div className="border border-fog-200 dark:border-asphalt-800 bg-white dark:bg-asphalt-900 rounded-xl p-5 text-sm h-fit">
             <p className="text-[11px] font-semibold tracking-widest text-amber-600 uppercase mb-3">Reporter profile</p>
             <div className="flex items-center gap-3 mb-4">
               {reporter.photoUrl ? (
@@ -329,7 +366,8 @@ export default function ReportDetailPage() {
               View all reports by this user →
             </Link>
           </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

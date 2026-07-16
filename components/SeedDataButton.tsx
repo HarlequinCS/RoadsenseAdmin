@@ -158,8 +158,12 @@ const SAMPLE_HAZARDS = [
 ];
 
 export default function SeedDataButton() {
+  const enabled = process.env.NODE_ENV !== "production";
+
   const [seeding, setSeeding] = useState(false);
   const [done, setDone] = useState(false);
+
+  if (!enabled) return null;
 
   async function handleSeed() {
     setSeeding(true);

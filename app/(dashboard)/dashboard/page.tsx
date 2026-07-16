@@ -1,25 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { DashboardStats, Hazard } from "@/lib/types";
-import { formatDate, getHazardTypeColor, riskChartColors } from "@/lib/style-helpers";
+import { Hazard } from "@/lib/types";
+import { formatDate, getHazardTypeColor, riskChartColors, toDate } from "@/lib/style-helpers";
 import { normalizeHazard } from "@/lib/firestore-helpers";
-import { isActiveHazard, countActiveHighCritical } from "@/lib/hazard-utils";
+import {
+  isActiveHazard,
+  countActiveHighCritical,
+  countNewReportsToday,
+  findLatestHazard,
+  formatTimeAgo,
+} from "@/lib/hazard-utils";
 import StatusBadge from "@/components/StatusBadge";
 import RiskBadge from "@/components/RiskBadge";
 import StatCard from "@/components/StatCard";
 import SeedDataButton from "@/components/SeedDataButton";
+import PriorityBanner from "@/components/PriorityBanner";
+import EmptyState from "@/components/EmptyState";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import {
-  IconUsers, IconFileText, IconAlertCircle, IconCircleCheck,
-  IconRefresh, IconArrowRight, IconSearch, IconFlame,
+  IconFileText, IconAlertCircle, IconRefresh, IconArrowRight, IconSearch, IconFlame,
+  IconWifi,
 } from "@tabler/icons-react";
 
 const HazardMap = dynamic(() => import("@/components/HazardMap"), {
@@ -46,54 +53,37 @@ function ChartTooltip({ active, payload, label }: TooltipProps) {
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalUsers: 0,
-    totalReports: 0,
-    activeHazards: 0,
-    newReports: 0,
-    underInvestigation: 0,
-    resolvedReports: 0,
-    highCriticalActive: 0,
-  });
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [search, setSearch] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
-      setStats((s) => ({ ...s, totalUsers: snap.size }));
-    });
-    const unsubHazards = onSnapshot(collection(db, "hazards"), (snap) => {
-      const all = snap.docs.map((d) => normalizeHazard(d.id, d.data()));
-      setHazards(all);
-      setStats((s) => ({
-        ...s,
-        totalReports: all.length,
-        activeHazards: all.filter(isActiveHazard).length,
-        newReports: all.filter((h) => h.status === "New").length,
-        underInvestigation: all.filter((h) => h.status === "Under Investigation").length,
-        resolvedReports: all.filter((h) => h.status === "Resolved").length,
-        highCriticalActive: countActiveHighCritical(all),
-      }));
+    const unsub = onSnapshot(collection(db, "hazards"), (snap) => {
+      setHazards(snap.docs.map((d) => normalizeHazard(d.id, d.data())));
       setLastUpdated(new Date());
     });
-    return () => { unsubUsers(); unsubHazards(); };
+    return () => unsub();
   }, []);
 
   const activeHazards = hazards.filter(isActiveHazard);
+  const newReports = hazards.filter((h) => h.status === "New").length;
+  const underInvestigation = hazards.filter((h) => h.status === "Under Investigation").length;
+  const highCritical = countActiveHighCritical(hazards);
+  const newToday = countNewReportsToday(hazards);
+  const lastReport = useMemo(() => findLatestHazard(hazards), [hazards]);
+  const lastReportDate = lastReport ? toDate(lastReport.createdAt) : null;
 
   const byType = Object.entries(
     hazards.reduce((acc, h) => { acc[h.hazardType] = (acc[h.hazardType] || 0) + 1; return acc; }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
-  const byRisk = Object.entries(
-    activeHazards.reduce((acc, h) => { acc[h.riskLevel] = (acc[h.riskLevel] || 0) + 1; return acc; }, {} as Record<string, number>)
-  ).map(([name, value]) => ({ name, value }));
-
   const recent = [...hazards]
-    .sort((a, b) => new Date(a.createdAt as string).getTime() - new Date(b.createdAt as string).getTime())
-    .reverse()
+    .sort((a, b) => {
+      const da = toDate(a.createdAt)?.getTime() ?? 0;
+      const db = toDate(b.createdAt)?.getTime() ?? 0;
+      return db - da;
+    })
     .slice(0, 6);
 
   const filtered = recent.filter(
@@ -117,8 +107,8 @@ export default function DashboardPage() {
           <h1 className="font-display font-semibold text-[26px] text-asphalt-950 dark:text-fog-50 tracking-tight">
             Overview
           </h1>
-          <p className="text-xs text-fog-600 dark:text-fog-400 mt-1" suppressHydrationWarning>
-            Last updated {lastUpdated.toLocaleTimeString()}
+          <p className="text-xs text-fog-600 dark:text-fog-400 mt-1">
+            What needs your attention right now — your action queue for road safety
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -135,28 +125,66 @@ export default function DashboardPage() {
 
       <div className="lane-divider w-full mb-6" />
 
-      <div className="grid grid-cols-4 gap-3.5 mb-7">
-        <StatCard label="Total users" value={stats.totalUsers} icon={<IconUsers size={16} />} tone="info" animate />
-        <StatCard label="Active hazards" value={stats.activeHazards} icon={<IconAlertCircle size={16} />} tone="warning" animate />
-        <StatCard label="Under investigation" value={stats.underInvestigation} icon={<IconFileText size={16} />} tone="default" animate />
-        <StatCard label="High / Critical" value={stats.highCriticalActive} icon={<IconFlame size={16} />} tone="danger" animate />
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div className="flex items-end gap-4">
+          <p className="font-display font-bold text-[40px] sm:text-[56px] leading-none text-asphalt-950 dark:text-fog-50 tabular-nums">
+            {activeHazards.length}
+          </p>
+          <div className="pb-1">
+            <p className="font-display font-semibold text-lg text-asphalt-950 dark:text-fog-50">
+              Active hazards
+            </p>
+            <p className="text-xs text-fog-500 dark:text-fog-400 mt-0.5">
+              {highCritical > 0
+                ? `${highCritical} high or critical need priority review`
+                : "No high-risk hazards in the queue"}
+            </p>
+          </div>
+        </div>
+        <p className="text-[11px] text-fog-400 shrink-0" suppressHydrationWarning>
+          Updated {lastUpdated.toLocaleTimeString()}
+        </p>
       </div>
 
-      <div className="grid grid-cols-4 gap-3.5 mb-7">
-        <StatCard label="Total reports" value={stats.totalReports} icon={<IconFileText size={16} />} tone="default" animate />
-        <StatCard label="New reports" value={stats.newReports} icon={<IconAlertCircle size={16} />} tone="warning" animate />
-        <StatCard label="Resolved" value={stats.resolvedReports} icon={<IconCircleCheck size={16} />} tone="success" animate />
+      {lastReportDate && (
+        <div className="mb-6 flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-signal-teal-50 dark:bg-signal-teal-500/10 border border-signal-teal-100 dark:border-signal-teal-500/20">
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-signal-teal-500 opacity-60" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-signal-teal-500" />
+          </span>
+          <IconWifi size={14} className="text-signal-teal-600 dark:text-signal-teal-100 shrink-0" />
+          <p className="text-xs text-signal-teal-600 dark:text-signal-teal-100" suppressHydrationWarning>
+            Connected to RoadSense mobile · Last report {formatTimeAgo(lastReportDate)}
+          </p>
+        </div>
+      )}
+
+      <PriorityBanner hazards={hazards} />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-7">
         <StatCard
-          label="Resolve rate"
-          value={stats.totalReports ? `${Math.round((stats.resolvedReports / stats.totalReports) * 100)}%` : "0%"}
-          icon={<IconCircleCheck size={16} />}
-          tone="success"
+          label="New reports"
+          value={newReports}
+          icon={<IconAlertCircle size={16} />}
+          tone="warning"
+          animate
+          delta={newToday > 0 ? `+${newToday} today` : undefined}
         />
+        <StatCard label="Active hazards" value={activeHazards.length} icon={<IconAlertCircle size={16} />} tone="warning" animate />
+        <StatCard label="High / Critical" value={highCritical} icon={<IconFlame size={16} />} tone="danger" animate />
+        <StatCard label="Under investigation" value={underInvestigation} icon={<IconFileText size={16} />} tone="default" animate />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-7">
-        <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4">
-          <p className="font-display font-medium text-sm mb-3 text-asphalt-950 dark:text-fog-50">Reports by hazard type</p>
+      <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4 mb-7">
+        <p className="font-display font-medium text-sm mb-1 text-asphalt-950 dark:text-fog-50">
+          Reports by hazard type
+        </p>
+        <p className="text-[11px] text-fog-400 mb-3">
+          Quick snapshot — see Analytics for full trends and breakdowns
+        </p>
+        {byType.length === 0 ? (
+          <EmptyState variant="no-data" className="py-8" />
+        ) : (
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={byType} barSize={28}>
               <XAxis dataKey="name" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
@@ -169,22 +197,7 @@ export default function DashboardPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4">
-          <p className="font-display font-medium text-sm mb-3 text-asphalt-950 dark:text-fog-50">Active hazards by risk</p>
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie data={byRisk} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3}>
-                {byRisk.map((entry) => (
-                  <Cell key={entry.name} fill={riskChartColors[entry.name as keyof typeof riskChartColors] || "#ccc"} />
-                ))}
-              </Pie>
-              <Tooltip content={<ChartTooltip />} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        )}
       </div>
 
       <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4 mb-7">
@@ -227,35 +240,38 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-fog-50 dark:bg-asphalt-800 text-left text-fog-600 dark:text-fog-400 text-xs">
-                <th className="px-4 py-2.5 font-medium">Reporter</th>
-                <th className="px-4 py-2.5 font-medium">Hazard</th>
-                <th className="px-4 py-2.5 font-medium">Risk</th>
-                <th className="px-4 py-2.5 font-medium">Date</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-fog-400 text-xs">No reports found</td></tr>
-              )}
-              {filtered.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-t border-fog-100 dark:border-asphalt-800 hover:bg-fog-50 dark:hover:bg-asphalt-800/50 transition-colors cursor-pointer"
-                  onClick={() => window.location.href = `/reports/${r.id}`}
-                >
-                  <td className="px-4 py-2.5 font-medium text-xs text-asphalt-950 dark:text-fog-100">{r.reporterName}</td>
-                  <td className="px-4 py-2.5 text-xs text-fog-600 dark:text-fog-400">{r.hazardType}</td>
-                  <td className="px-4 py-2.5"><RiskBadge risk={r.riskLevel} /></td>
-                  <td className="px-4 py-2.5 text-xs text-fog-400">{formatDate(r.createdAt)}</td>
-                  <td className="px-4 py-2.5"><StatusBadge status={r.status} /></td>
+          {hazards.length === 0 ? (
+            <EmptyState variant="no-data" />
+          ) : filtered.length === 0 ? (
+            <EmptyState variant="no-results" />
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-fog-50 dark:bg-asphalt-800 text-left text-fog-600 dark:text-fog-400 text-xs">
+                  <th className="px-4 py-2.5 font-medium">Reporter</th>
+                  <th className="px-4 py-2.5 font-medium">Hazard</th>
+                  <th className="px-4 py-2.5 font-medium">Risk</th>
+                  <th className="px-4 py-2.5 font-medium">Date</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-t border-fog-100 dark:border-asphalt-800 hover:bg-fog-50 dark:hover:bg-asphalt-800/50 transition-colors cursor-pointer"
+                    onClick={() => window.location.href = `/reports/${r.id}`}
+                  >
+                    <td className="px-4 py-2.5 font-medium text-xs text-asphalt-950 dark:text-fog-100">{r.reporterName}</td>
+                    <td className="px-4 py-2.5 text-xs text-fog-600 dark:text-fog-400">{r.hazardType}</td>
+                    <td className="px-4 py-2.5"><RiskBadge risk={r.riskLevel} /></td>
+                    <td className="px-4 py-2.5 text-xs text-fog-400">{formatDate(r.createdAt)}</td>
+                    <td className="px-4 py-2.5"><StatusBadge status={r.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

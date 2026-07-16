@@ -6,6 +6,7 @@ import {
   RiskLevel,
   UserStats,
 } from "./types";
+import { toDate } from "./style-helpers";
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -121,4 +122,70 @@ export function countActiveHighCritical(hazards: Hazard[]): number {
       isActiveHazard(h) &&
       (h.riskLevel === "High" || h.riskLevel === "Critical")
   ).length;
+}
+
+export function countNewReportsToday(hazards: Hazard[]): number {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return hazards.filter((h) => {
+    if (h.status !== "New") return false;
+    const d = toDate(h.createdAt);
+    return d !== null && d >= start;
+  }).length;
+}
+
+export function findLatestHazard(hazards: Hazard[]): Hazard | null {
+  if (!hazards.length) return null;
+  return hazards.reduce((latest, h) => {
+    const d = toDate(h.createdAt);
+    const ld = toDate(latest.createdAt);
+    if (!d) return latest;
+    if (!ld || d > ld) return h;
+    return latest;
+  });
+}
+
+export function formatTimeAgo(date: Date): string {
+  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString();
+}
+
+/** Hours from report submission to first admin action (status or notes update). */
+export function computeAvgResponseTimeHours(hazards: Hazard[]): number | null {
+  const durations: number[] = [];
+
+  for (const hazard of hazards) {
+    const created = toDate(hazard.createdAt);
+    const responded = toDate(hazard.statusUpdatedAt) ?? toDate(hazard.adminUpdatedAt);
+    if (!created || !responded) continue;
+    if (hazard.status === "New" && !hazard.adminUpdatedAt && !hazard.statusUpdatedAt) continue;
+
+    const diffMs = responded.getTime() - created.getTime();
+    if (diffMs > 0) durations.push(diffMs);
+  }
+
+  if (!durations.length) return null;
+  const avgMs = durations.reduce((sum, ms) => sum + ms, 0) / durations.length;
+  return avgMs / (1000 * 60 * 60);
+}
+
+export function countActionedHazards(hazards: Hazard[]): number {
+  return hazards.filter(
+    (h) => toDate(h.statusUpdatedAt) !== null || toDate(h.adminUpdatedAt) !== null
+  ).length;
+}
+
+export function formatDurationHours(hours: number | null): string {
+  if (hours === null) return "—";
+  if (hours < 1) return `${Math.round(hours * 60)} min`;
+  if (hours < 48) return `${hours.toFixed(1)} hrs`;
+  const days = Math.floor(hours / 24);
+  const remHrs = Math.round(hours % 24);
+  return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
 }

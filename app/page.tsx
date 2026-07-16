@@ -1,142 +1,354 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import Logo from "@/components/Logo";
+import PublicNav from "@/components/public/PublicNav";
+import PublicFooter from "@/components/public/PublicFooter";
+import DownloadCta from "@/components/public/DownloadCta";
+import SectionHeading from "@/components/public/SectionHeading";
+import JsonLd from "@/components/seo/JsonLd";
+import { TAGLINE } from "@/lib/public-site";
 import {
-  IconMapPin, IconAlertTriangle, IconChartBar, IconUsers,
-  IconArrowRight, IconBrandGithub, IconDownload,
+  buildPageMetadata,
+  softwareApplicationJsonLd,
+  websiteJsonLd,
+} from "@/lib/seo";
+import {
+  IconMapPin,
+  IconAlertTriangle,
+  IconBell,
+  IconShieldCheck,
+  IconLogin,
+  IconChartBar,
+  IconSparkles,
+  IconUsers,
+  IconArrowRight,
+  IconRoute,
+  IconCamera,
+  IconCheck,
+  IconBuildingCommunity,
 } from "@tabler/icons-react";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Community hazard reporting",
+  description:
+    "RoadSense lets drivers report potholes, debris, and road hazards in under a minute — photo, GPS, and community verification.",
+  path: "/",
+  openGraphTitle: "RoadSense — Community hazard reporting",
+});
+
+const HIGHLIGHTS = [
+  {
+    icon: IconMapPin,
+    title: "Real-time hazard map",
+    description: "Clustered markers, filters, and a map that follows you as you drive.",
+    tone: "cyan" as const,
+  },
+  {
+    icon: IconAlertTriangle,
+    title: "Automatic risk scoring",
+    description: "Every report is rated Low to Critical based on type and nearby hazards.",
+    tone: "orange" as const,
+  },
+  {
+    icon: IconBell,
+    title: "Proximity alerts",
+    description: "Push notifications and in-app prompts when hazards are within 150 m.",
+    tone: "cyan" as const,
+  },
+  {
+    icon: IconUsers,
+    title: "Contributor badges",
+    description: "Recognise active reporters — from New Reporter to Safety Hero.",
+    tone: "teal" as const,
+  },
+  {
+    icon: IconLogin,
+    title: "Easy sign-in",
+    description: "Email registration or Google Sign-In — your profile syncs across sessions.",
+    tone: "cyan" as const,
+  },
+  {
+    icon: IconShieldCheck,
+    title: "Privacy & terms",
+    description: "Legal agreement gate on first launch — transparent terms and privacy policy.",
+    tone: "teal" as const,
+  },
+];
+
+const STEPS = [
+  {
+    step: "01",
+    title: "Report",
+    description: "A guided 5-step wizard — choose type, add a photo, confirm GPS, and submit in under a minute.",
+    icon: IconCamera,
+  },
+  {
+    step: "02",
+    title: "Alert",
+    description: "Nearby drivers see hazards on the home dashboard and full-screen map within 5 km.",
+    icon: IconBell,
+  },
+  {
+    step: "03",
+    title: "Verify",
+    description: "The community confirms hazards still exist or marks them resolved — especially within 150 m.",
+    icon: IconCheck,
+  },
+  {
+    step: "04",
+    title: "Act",
+    description: "Authorities investigate via this admin platform — status updates flow back to the community.",
+    icon: IconBuildingCommunity,
+  },
+];
+
+const toneStyles = {
+  cyan: "bg-brand-cyan-50 dark:bg-brand-cyan/15 text-brand-cyan",
+  orange: "bg-brand-orange-50 dark:bg-brand-orange/15 text-brand-orange",
+  teal: "bg-signal-teal-50 dark:bg-signal-teal-600/20 text-signal-teal-600 dark:text-signal-teal-100",
+};
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-fog-50 dark:bg-asphalt-950 flex flex-col">
-      {/* Nav */}
-      <header className="flex items-center justify-between px-8 py-5 max-w-6xl mx-auto w-full">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-            <IconMapPin size={18} className="text-amber-600 dark:text-amber-400" strokeWidth={2.25} />
-          </div>
-          <span className="font-display font-semibold text-base text-asphalt-950 dark:text-fog-50 tracking-tight">
-            RoadSense
-          </span>
-        </div>
-        <div className="flex items-center gap-5">
-          <Link
-            href="/about"
-            className="text-sm font-medium text-fog-600 dark:text-fog-400 hover:text-asphalt-950 dark:hover:text-fog-100 transition-colors"
-          >
-            About
-          </Link>
-          <Link
-            href="/login"
-            className="text-sm font-medium px-4 py-2 rounded-lg border border-fog-200 dark:border-asphalt-700 hover:bg-white dark:hover:bg-asphalt-800 transition-colors text-asphalt-700 dark:text-fog-200"
-          >
-            Sign in
-          </Link>
-        </div>
-      </header>
+      <JsonLd data={[websiteJsonLd(), softwareApplicationJsonLd()]} />
+      <PublicNav />
 
       {/* Hero */}
-      <main className="flex-1 flex items-center">
-        <div className="max-w-6xl mx-auto w-full px-8 py-16 grid grid-cols-2 gap-16 items-center">
-          <div>
-            <p className="text-[11px] font-semibold tracking-widest text-amber-600 dark:text-amber-400 uppercase mb-4">
-              Crowdsourced Road Safety
+      <section className="hero-gradient border-b border-fog-200/60 dark:border-asphalt-800/60">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div>
+              <Logo
+                size="hero"
+                layout="stacked"
+                align="start"
+                subtitle="Crowdsourced Road Safety"
+                className="mb-8"
+              />
+              <h1 className="font-display font-semibold text-4xl sm:text-[44px] leading-[1.1] text-asphalt-950 dark:text-fog-50 tracking-tight mb-5">
+                What if every driver could warn the next one?
+              </h1>
+              <p className="text-base sm:text-lg text-fog-600 dark:text-fog-400 leading-relaxed mb-3 max-w-lg">
+                Road hazards are everywhere — potholes, floods, debris — but official reporting
+                is slow. RoadSense lets anyone report a hazard in seconds with a photo, GPS
+                location, and a single tap.
+              </p>
+              <p className="text-sm text-fog-500 dark:text-fog-400 mb-8 max-w-lg">
+                Nearby drivers see it immediately. The community keeps reports accurate.
+                Authorities act through a dedicated admin platform.
+              </p>
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <DownloadCta />
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-xl border border-fog-200 dark:border-asphalt-700 hover:bg-white dark:hover:bg-asphalt-800 transition-colors text-asphalt-700 dark:text-fog-200"
+                >
+                  Admin Sign in
+                  <IconArrowRight size={16} />
+                </Link>
+              </div>
+              <p className="text-[11px] text-fog-400 uppercase tracking-wide">
+                Android only · RoadSense v3.0
+              </p>
+            </div>
+
+            {/* Decorative visual */}
+            <div className="relative hidden lg:block">
+              <div className="relative bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-2xl p-8 shadow-sm">
+                <div className="absolute -top-3 -right-3 w-16 h-16 rounded-full bg-brand-orange/20 blur-xl" />
+                <div className="absolute -bottom-4 -left-4 w-24 h-24 rounded-full bg-brand-cyan/20 blur-xl" />
+                <div className="space-y-4 relative">
+                  <StatPill label="Active hazards nearby" value="3" tone="orange" />
+                  <StatPill label="Within 3 km" value="Pothole · High risk" tone="cyan" />
+                  <StatPill label="Community verifications" value="12 confirmations" tone="teal" />
+                  <div className="flex items-center gap-2 pt-2">
+                    <IconRoute size={20} className="text-brand-cyan" />
+                    <span className="text-xs text-fog-500">Live map · Real-time sync</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Problem → Solution */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-2xl p-6 sm:p-8">
+            <p className="text-[11px] font-semibold tracking-widest text-signal-red-500 uppercase mb-3">
+              The problem
             </p>
-            <h1 className="font-display font-semibold text-[44px] leading-[1.1] text-asphalt-950 dark:text-fog-50 tracking-tight mb-5">
-              Every pothole reported.<br />Every hazard tracked.
-            </h1>
-            <p className="text-base text-fog-600 dark:text-fog-400 mb-8 max-w-md">
-              RoadSense lets communities report road hazards in real time with GPS
-              and photos — giving administrators the tools to investigate, act, and
-              resolve issues faster.
+            <p className="text-sm sm:text-base text-fog-600 dark:text-fog-400 leading-relaxed">
+              By the time councils learn about a dangerous stretch of road, dozens of drivers
+              have already paid the price — damaged tyres, near-misses, or worse. Reporting
+              channels are slow, buried in bureaucracy, or simply unknown.
             </p>
-            <div className="flex flex-wrap items-center gap-3 mb-10">
+          </div>
+          <div className="bg-brand-cyan-50 dark:bg-brand-cyan/10 border border-brand-cyan/20 rounded-2xl p-6 sm:p-8">
+            <p className="text-[11px] font-semibold tracking-widest text-brand-cyan uppercase mb-3">
+              The RoadSense way
+            </p>
+            <p className="text-sm sm:text-base text-fog-600 dark:text-fog-400 leading-relaxed">
+              Report in under a minute. Every nearby driver is alerted. The community verifies
+              what is still there. Administrators investigate and resolve — turning scattered
+              complaints into an organised, trackable system for safer roads.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="bg-white dark:bg-asphalt-900/50 border-y border-fog-200 dark:border-asphalt-800">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+          <SectionHeading
+            eyebrow="How it works"
+            title="From report to resolution"
+            subtitle="Four steps connect drivers on the road with authorities who can act."
+          />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {STEPS.map(({ step, title, description, icon: Icon }) => (
+              <div
+                key={step}
+                className="relative bg-fog-50 dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-5"
+              >
+                <span className="text-[10px] font-mono font-bold text-brand-orange">{step}</span>
+                <div className="w-10 h-10 rounded-lg bg-brand-cyan-50 dark:bg-brand-cyan/15 text-brand-cyan flex items-center justify-center mt-3 mb-3">
+                  <Icon size={20} />
+                </div>
+                <p className="font-display font-semibold text-sm text-asphalt-950 dark:text-fog-50 mb-1.5">
+                  {title}
+                </p>
+                <p className="text-xs text-fog-600 dark:text-fog-400 leading-relaxed">{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* App highlights */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+        <SectionHeading
+          eyebrow="Mobile app"
+          title="Built for drivers on the move"
+          subtitle="Waze-inspired design — fast, familiar, and focused on real-time road awareness."
+        />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {HIGHLIGHTS.map(({ icon: Icon, title, description, tone }) => (
+            <div
+              key={title}
+              className="flex items-start gap-3.5 bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-5"
+            >
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${toneStyles[tone]}`}>
+                <Icon size={20} />
+              </div>
+              <div>
+                <p className="font-display font-medium text-sm text-asphalt-950 dark:text-fog-50 mb-1">
+                  {title}
+                </p>
+                <p className="text-xs text-fog-600 dark:text-fog-400 leading-relaxed">{description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Admin teaser */}
+      <section className="bg-asphalt-950 text-fog-100">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
+            <div>
+              <p className="text-[11px] font-semibold tracking-widest text-brand-cyan uppercase mb-3">
+                For authorities
+              </p>
+              <h2 className="font-display font-semibold text-2xl sm:text-3xl tracking-tight mb-4">
+                The admin platform behind the community
+              </h2>
+              <p className="text-sm text-fog-400 leading-relaxed mb-6">
+                This website is the authority-facing half of RoadSense. Review hazard queues,
+                investigate reports on the map, track analytics, and use AI-assisted triage —
+                all synced in real time with the mobile app.
+              </p>
               <Link
                 href="/login"
-                className="flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-lg bg-asphalt-950 dark:bg-fog-100 text-white dark:text-asphalt-950 hover:bg-asphalt-800 dark:hover:bg-white transition-colors"
+                className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-xl bg-fog-100 text-asphalt-950 hover:bg-white transition-colors"
               >
-                Go to Dashboard
+                Admin Sign in
                 <IconArrowRight size={16} />
               </Link>
-              <a href="#" className="flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-lg border border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
-                <IconDownload size={16} />
-                Download App
-              </a>
-              <a href="https://github.com/HarlequinCS/RoadSense" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-lg border border-fog-200 dark:border-asphalt-700 hover:bg-white dark:hover:bg-asphalt-800 transition-colors text-asphalt-700 dark:text-fog-200">
-                <IconBrandGithub size={16} />
-                GitHub
-              </a>
             </div>
-            <div className="lane-divider w-40" />
-          </div>
-
-          {/* Feature cards */}
-          <div className="space-y-3">
-            <FeatureCard
-              icon={<IconAlertTriangle size={18} />}
-              tone="warning"
-              title="Real-time hazard reports"
-              description="GPS-tagged reports with photos, submitted straight from the mobile app."
-            />
-            <FeatureCard
-              icon={<IconMapPin size={18} />}
-              tone="info"
-              title="Interactive hazard map"
-              description="See exactly where issues are, color-coded by investigation status."
-            />
-            <FeatureCard
-              icon={<IconChartBar size={18} />}
-              tone="success"
-              title="Analytics & trends"
-              description="Track report volume by category, status, and month over time."
-            />
-            <FeatureCard
-              icon={<IconUsers size={18} />}
-              tone="default"
-              title="User management"
-              description="Monitor community members and their reporting activity."
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <AdminFeature icon={IconAlertTriangle} label="Reports queue" />
+              <AdminFeature icon={IconMapPin} label="Map command center" />
+              <AdminFeature icon={IconChartBar} label="Analytics" />
+              <AdminFeature icon={IconSparkles} label="AI assist" />
+            </div>
           </div>
         </div>
-      </main>
+      </section>
 
-      {/* Footer */}
-      <footer className="border-t border-fog-200 dark:border-asphalt-800 py-6">
-        <div className="max-w-6xl mx-auto px-8 flex items-center justify-between text-xs text-fog-400">
-          <span>ICT602 Mobile Technology Group Project</span>
-          <span>© 2026 RoadSense</span>
+      {/* Impact quote */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+        <blockquote className="max-w-3xl">
+          <p className="font-display text-xl sm:text-2xl text-asphalt-950 dark:text-fog-50 leading-relaxed italic">
+            &ldquo;A driver who knows about a hazard can protect a driver who does not.&rdquo;
+          </p>
+          <footer className="mt-4 text-sm text-fog-500">— The RoadSense mission</footer>
+        </blockquote>
+      </section>
+
+      {/* Final CTA */}
+      <section className="border-t border-fog-200 dark:border-asphalt-800 bg-white dark:bg-asphalt-900/50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+          <Logo size="xl" layout="stacked" align="start" className="mb-4" />
+          <p className="text-sm text-fog-600 dark:text-fog-400 mb-6">{TAGLINE}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <DownloadCta />
+            <Link
+              href="/about"
+              className="inline-flex items-center gap-2 text-sm font-medium px-5 py-3 rounded-xl border border-fog-200 dark:border-asphalt-700 hover:bg-fog-50 dark:hover:bg-asphalt-800 transition-colors text-asphalt-700 dark:text-fog-200"
+            >
+              Meet the team
+              <IconArrowRight size={16} />
+            </Link>
+          </div>
         </div>
-      </footer>
+      </section>
+
+      <PublicFooter />
     </div>
   );
 }
 
-function FeatureCard({
-  icon,
-  title,
-  description,
+function StatPill({
+  label,
+  value,
   tone,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  tone: "warning" | "info" | "success" | "default";
+  label: string;
+  value: string;
+  tone: "cyan" | "orange" | "teal";
 }) {
-  const toneMap: Record<string, string> = {
-    warning: "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400",
-    info: "bg-signal-blue-50 dark:bg-signal-blue-600/20 text-signal-blue-600 dark:text-signal-blue-100",
-    success: "bg-signal-teal-50 dark:bg-signal-teal-600/20 text-signal-teal-600 dark:text-signal-teal-100",
-    default: "bg-fog-100 dark:bg-asphalt-800 text-fog-600 dark:text-fog-400",
-  };
+  const dot =
+    tone === "orange" ? "bg-brand-orange" : tone === "cyan" ? "bg-brand-cyan" : "bg-signal-teal-500";
+
   return (
-    <div className="flex items-start gap-3.5 bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${toneMap[tone]}`}>
-        {icon}
-      </div>
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-fog-50 dark:bg-asphalt-800">
+      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
       <div>
-        <p className="font-display font-medium text-sm text-asphalt-950 dark:text-fog-50 mb-0.5">
-          {title}
-        </p>
-        <p className="text-xs text-fog-600 dark:text-fog-400">{description}</p>
+        <p className="text-[10px] text-fog-500 uppercase tracking-wide">{label}</p>
+        <p className="text-sm font-medium text-asphalt-950 dark:text-fog-50">{value}</p>
       </div>
+    </div>
+  );
+}
+
+function AdminFeature({ icon: Icon, label }: { icon: typeof IconMapPin; label: string }) {
+  return (
+    <div className="flex items-center gap-2.5 p-4 rounded-xl bg-asphalt-900 border border-asphalt-800">
+      <Icon size={18} className="text-brand-cyan shrink-0" />
+      <span className="text-sm font-medium">{label}</span>
     </div>
   );
 }

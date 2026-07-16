@@ -1,14 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Hazard } from "@/lib/types";
 import { statusChartColors, riskChartColors, toDate, getHazardTypeColor } from "@/lib/style-helpers";
 import { normalizeHazard } from "@/lib/firestore-helpers";
-import { isActiveHazard, countActiveHighCritical } from "@/lib/hazard-utils";
+import {
+  isActiveHazard,
+  countActiveHighCritical,
+  computeAvgResponseTimeHours,
+  countActionedHazards,
+  formatDurationHours,
+} from "@/lib/hazard-utils";
+import { exportAnalyticsCSV } from "@/lib/export-utils";
 import StatCard from "@/components/StatCard";
+import EmptyState from "@/components/EmptyState";
+import AiAnalyticsSummary from "@/components/AiAnalyticsSummary";
+import { AnalyticsSummaryInput } from "@/lib/ai/types";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend,
@@ -16,7 +25,7 @@ import {
 } from "recharts";
 import {
   IconFileText, IconCircleCheck, IconAlertTriangle, IconCalendarStats,
-  IconFlame, IconSearch,
+  IconFlame, IconSearch, IconDownload, IconPrinter, IconClock,
 } from "@tabler/icons-react";
 
 interface TooltipProps {
@@ -98,6 +107,9 @@ export default function AnalyticsPage() {
     : 0;
 
   const mostCommon = byType[0]?.name || "—";
+  const avgResponseHours = useMemo(() => computeAvgResponseTimeHours(hazards), [hazards]);
+  const avgResponseLabel = formatDurationHours(avgResponseHours);
+  const actionedCount = useMemo(() => countActionedHazards(hazards), [hazards]);
 
   const thisMonth = useMemo(() => {
     const now = new Date();
@@ -106,6 +118,54 @@ export default function AnalyticsPage() {
       return d ? d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() : false;
     }).length;
   }, [hazards]);
+
+  const analyticsAiData = useMemo((): AnalyticsSummaryInput => ({
+    totalReports: hazards.length,
+    activeHazards: activeHazards.length,
+    highCriticalActive: countActiveHighCritical(hazards),
+    resolveRate,
+    avgResponseTime: avgResponseLabel,
+    actionedCount,
+    reportsThisMonth: thisMonth,
+    mostCommonHazard: mostCommon,
+    newReports: hazards.filter((h) => h.status === "New").length,
+    underInvestigation: hazards.filter((h) => h.status === "Under Investigation").length,
+    byType: byType.map((row) => ({
+      name: row.name,
+      value: row.value,
+      pct: hazards.length ? Math.round((row.value / hazards.length) * 100) : 0,
+    })),
+    byStatus: byStatus.map((row) => ({ name: row.name, value: row.value })),
+    monthlyTrend,
+  }), [
+    hazards,
+    activeHazards.length,
+    resolveRate,
+    avgResponseLabel,
+    actionedCount,
+    thisMonth,
+    mostCommon,
+    byType,
+    byStatus,
+    monthlyTrend,
+  ]);
+
+  function handleExportCSV() {
+    exportAnalyticsCSV({
+      generatedAt: new Date().toLocaleString("en-MY"),
+      totalReports: hazards.length,
+      activeHazards: activeHazards.length,
+      resolveRate,
+      avgResponseTime: avgResponseLabel,
+      actionedCount,
+      byType: byType.map((row) => ({
+        name: row.name,
+        value: row.value,
+        pct: hazards.length ? Math.round((row.value / hazards.length) * 100) : 0,
+      })),
+      monthlyTrend,
+    });
+  }
 
   if (loading) {
     return (
@@ -117,27 +177,74 @@ export default function AnalyticsPage() {
     );
   }
 
+  if (hazards.length === 0) {
+    return (
+      <div>
+        <div className="mb-6">
+          <p className="text-[11px] font-semibold tracking-widest text-amber-600 uppercase mb-1.5">Insights</p>
+          <h1 className="font-display font-semibold text-[26px] text-asphalt-950 dark:text-fog-50 tracking-tight">Analytics</h1>
+        </div>
+        <div className="lane-divider w-full mb-6" />
+        <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl">
+          <EmptyState variant="no-data" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <div className="mb-6">
-        <p className="text-[11px] font-semibold tracking-widest text-amber-600 uppercase mb-1.5">Insights</p>
-        <h1 className="font-display font-semibold text-[26px] text-asphalt-950 dark:text-fog-50 tracking-tight">Analytics</h1>
-        <p className="text-xs text-fog-600 dark:text-fog-400 mt-1">Report trends and breakdown across all hazard data</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold tracking-widest text-amber-600 uppercase mb-1.5">Insights</p>
+          <h1 className="font-display font-semibold text-[26px] text-asphalt-950 dark:text-fog-50 tracking-tight">Analytics</h1>
+          <p className="text-xs text-fog-600 dark:text-fog-400 mt-1">
+            Trends and breakdowns for stakeholders — resolve rates, monthly patterns, and hazard distribution
+          </p>
+        </div>
+        <div className="no-print flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-fog-200 dark:border-asphalt-700 hover:bg-fog-50 dark:hover:bg-asphalt-800 transition-colors text-asphalt-700 dark:text-fog-200"
+          >
+            <IconDownload size={14} />
+            Export CSV
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-fog-200 dark:border-asphalt-700 hover:bg-fog-50 dark:hover:bg-asphalt-800 transition-colors text-asphalt-700 dark:text-fog-200"
+          >
+            <IconPrinter size={14} />
+            Print / PDF
+          </button>
+        </div>
       </div>
       <div className="lane-divider w-full mb-6" />
 
-      <div className="grid grid-cols-4 gap-3.5 mb-7">
+      <AiAnalyticsSummary data={analyticsAiData} />
+
+      <div className="print-only hidden mb-4 text-sm">
+        <p className="font-display font-semibold text-lg">RoadSense Analytics Summary</p>
+        <p className="text-xs text-fog-500">Generated {new Date().toLocaleString("en-MY")}</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-7">
         <StatCard label="Total reports" value={hazards.length} icon={<IconFileText size={16} />} tone="info" animate />
         <StatCard label="Active hazards" value={activeHazards.length} icon={<IconAlertTriangle size={16} />} tone="warning" animate />
         <StatCard label="High / Critical active" value={countActiveHighCritical(hazards)} icon={<IconFlame size={16} />} tone="danger" animate />
         <StatCard label="Reports this month" value={thisMonth} icon={<IconCalendarStats size={16} />} tone="default" animate />
       </div>
 
-      <div className="grid grid-cols-4 gap-3.5 mb-7">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-7">
         <StatCard label="Resolve rate" value={`${resolveRate}%`} icon={<IconCircleCheck size={16} />} tone="success" />
+        <StatCard
+          label="Avg response time"
+          value={avgResponseLabel}
+          icon={<IconClock size={16} />}
+          tone="info"
+        />
+        <StatCard label="Actioned reports" value={actionedCount} icon={<IconSearch size={16} />} tone="default" />
         <StatCard label="Most common hazard" value={mostCommon} icon={<IconAlertTriangle size={16} />} tone="warning" />
-        <StatCard label="Under investigation" value={hazards.filter((h) => h.status === "Under Investigation").length} icon={<IconSearch size={16} />} tone="default" />
-        <StatCard label="New reports" value={hazards.filter((h) => h.status === "New").length} icon={<IconFileText size={16} />} tone="info" />
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -212,7 +319,7 @@ export default function AnalyticsPage() {
           </thead>
           <tbody>
             {byType.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-fog-400 text-xs">No hazard data yet</td></tr>
+              <tr><td colSpan={4}><EmptyState variant="no-data" className="py-6" /></td></tr>
             )}
             {byType.map((row) => {
               const pct = hazards.length ? Math.round((row.value / hazards.length) * 100) : 0;

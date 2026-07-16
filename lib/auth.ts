@@ -1,6 +1,8 @@
 import { User } from "firebase/auth";
 
-const SKIP_ADMIN_CHECK = process.env.NEXT_PUBLIC_SKIP_ADMIN_CHECK === "true";
+const SKIP_ADMIN_CHECK =
+  process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_SKIP_ADMIN_CHECK === "true";
 
 export async function isAdminUser(user: User | null): Promise<boolean> {
   if (!user) return false;

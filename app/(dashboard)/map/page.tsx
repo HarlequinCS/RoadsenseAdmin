@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
 import dynamic from "next/dynamic";
+import { useSearchParams, useRouter } from "next/navigation";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Hazard } from "@/lib/types";
@@ -19,11 +20,24 @@ const HazardMap = dynamic(() => import("@/components/HazardMap"), {
 });
 
 type ColorMode = "status" | "risk";
+type MapFilter = "all" | "new" | "critical" | "investigating";
 
-export default function MapPage() {
+const MAP_FILTERS: { key: MapFilter; label: string }[] = [
+  { key: "all", label: "All active" },
+  { key: "new", label: "New" },
+  { key: "critical", label: "Critical" },
+  { key: "investigating", label: "Investigating" },
+];
+
+function MapPageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const urlFilter = (searchParams.get("filter") as MapFilter) || "all";
+
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [colorBy, setColorBy] = useState<ColorMode>("risk");
   const [showResolved, setShowResolved] = useState(false);
+  const [mapHeight, setMapHeight] = useState(500);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "hazards"), (snap) => {
@@ -32,7 +46,37 @@ export default function MapPage() {
     return () => unsub();
   }, []);
 
-  const visible = showResolved ? hazards : hazards.filter(isActiveHazard);
+  useEffect(() => {
+    setMapHeight(Math.max(400, window.innerHeight - 320));
+  }, []);
+
+  const setUrlFilter = useCallback(
+    (filter: MapFilter) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (filter === "all") params.delete("filter");
+      else params.set("filter", filter);
+      const qs = params.toString();
+      router.replace(qs ? `/map?${qs}` : "/map");
+    },
+    [router, searchParams]
+  );
+
+  const filtered = useMemo(() => {
+    let list = showResolved ? hazards : hazards.filter(isActiveHazard);
+
+    if (urlFilter === "new") {
+      list = list.filter((h) => h.status === "New");
+    } else if (urlFilter === "critical") {
+      list = list.filter(
+        (h) => isActiveHazard(h) && (h.riskLevel === "High" || h.riskLevel === "Critical")
+      );
+    } else if (urlFilter === "investigating") {
+      list = list.filter((h) => h.status === "Under Investigation");
+    }
+
+    return list;
+  }, [hazards, showResolved, urlFilter]);
+
   const activeCount = hazards.filter(isActiveHazard).length;
   const highCritical = hazards.filter(
     (h) => isActiveHazard(h) && (h.riskLevel === "High" || h.riskLevel === "Critical")
@@ -53,10 +97,10 @@ export default function MapPage() {
             Hazard map
           </h1>
           <p className="text-xs text-fog-600 dark:text-fog-400 mt-1">
-            Plot active hazards — resolved hazards are hidden from the mobile app
+            Select a hazard from the list to zoom in, or click a marker on the map
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <div className="flex rounded-lg border border-fog-200 dark:border-asphalt-700 overflow-hidden text-xs">
             <button
               onClick={() => setColorBy("risk")}
@@ -85,10 +129,26 @@ export default function MapPage() {
 
       <div className="lane-divider w-full mb-6" />
 
-      <div className="grid grid-cols-3 gap-3.5 mb-5">
+      <div className="flex gap-1.5 flex-wrap mb-4">
+        {MAP_FILTERS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setUrlFilter(key)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+              urlFilter === key
+                ? "bg-asphalt-950 dark:bg-fog-100 text-white dark:text-asphalt-950 border-transparent"
+                : "border-fog-200 dark:border-asphalt-700 text-fog-600 dark:text-fog-400 hover:bg-fog-50 dark:hover:bg-asphalt-800"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-5">
         <StatCard label="Active hazards" value={activeCount} icon={<IconMap2 size={16} />} tone="warning" animate />
         <StatCard label="High / Critical" value={highCritical} icon={<IconFlame size={16} />} tone="danger" animate />
-        <StatCard label="Showing on map" value={visible.length} icon={<IconAlertTriangle size={16} />} tone="info" animate />
+        <StatCard label="Showing on map" value={filtered.length} icon={<IconAlertTriangle size={16} />} tone="info" animate />
       </div>
 
       <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4">
@@ -101,12 +161,21 @@ export default function MapPage() {
           ))}
         </div>
         <HazardMap
-          hazards={visible}
+          hazards={filtered}
           activeOnly={false}
           colorBy={colorBy}
-          height={Math.max(400, typeof window !== "undefined" ? window.innerHeight - 320 : 500)}
+          height={mapHeight}
+          layout="with-panel"
         />
       </div>
     </div>
+  );
+}
+
+export default function MapPage() {
+  return (
+    <Suspense fallback={<div className="h-96 rounded-xl bg-fog-100 dark:bg-asphalt-800 animate-pulse" />}>
+      <MapPageContent />
+    </Suspense>
   );
 }

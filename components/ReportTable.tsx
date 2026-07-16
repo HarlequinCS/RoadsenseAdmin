@@ -1,20 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
-import { Hazard, HazardStatus, HAZARD_STATUSES, HAZARD_TYPES, RISK_LEVELS } from "@/lib/types";
+import { Hazard, HazardStatus, HAZARD_STATUSES, HAZARD_TYPES, RISK_LEVELS, RiskLevel } from "@/lib/types";
 import { formatDate } from "@/lib/style-helpers";
 import { normalizeHazard } from "@/lib/firestore-helpers";
-import { updateHazardStatus, deleteHazard } from "@/lib/hazard-service";
+import { updateHazardStatus, deleteHazard, logBulkStatusChange } from "@/lib/hazard-service";
+import { isActiveHazard } from "@/lib/hazard-utils";
+import { exportHazardsCSV } from "@/lib/export-utils";
 import RiskBadge from "@/components/RiskBadge";
+import EmptyState from "@/components/EmptyState";
+import HazardThumbnail from "@/components/HazardThumbnail";
+import ReportCard from "@/components/ReportCard";
 import {
   IconSearch, IconEye, IconCheck,
   IconFilter, IconX, IconDownload, IconPrinter, IconTrash,
 } from "@tabler/icons-react";
 
 const TABS: Array<HazardStatus | "All"> = ["All", ...HAZARD_STATUSES];
+
+type UrlFilter = "new" | "critical" | "investigating" | "resolved" | "all";
+
+const QUICK_FILTERS: { key: UrlFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "new", label: "New" },
+  { key: "critical", label: "Critical" },
+  { key: "investigating", label: "Investigating" },
+  { key: "resolved", label: "Resolved" },
+];
+
+const RISK_ORDER: Record<RiskLevel, number> = {
+  Critical: 0,
+  High: 1,
+  Medium: 2,
+  Low: 3,
+};
 
 const STATUS_STYLES: Record<HazardStatus, string> = {
   New: "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400",
@@ -46,31 +69,11 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   );
 }
 
-function exportToCSV(reports: Hazard[]) {
-  const headers = ["Report ID", "Reporter", "Hazard Type", "Risk", "Description", "Date", "Status", "Verifications"];
-  const rows = reports.map((r) => [
-    r.id,
-    r.reporterName || "",
-    r.hazardType || "",
-    r.riskLevel || "",
-    (r.description || "").replace(/"/g, '""'),
-    formatDate(r.createdAt),
-    r.status,
-    String(r.verificationCount ?? 0),
-  ]);
-  const csvContent = [headers, ...rows]
-    .map((row) => row.map((field) => `"${field}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `roadsense-reports-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function ReportTable() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const urlFilter = (searchParams.get("filter") as UrlFilter) || "all";
+
   const [reports, setReports] = useState<Hazard[]>([]);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<HazardStatus | "All">("All");
@@ -81,6 +84,26 @@ export default function ReportTable() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
   const [adminUser, setAdminUser] = useState<User | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+
+  useEffect(() => {
+    if (urlFilter === "new") setTab("New");
+    else if (urlFilter === "investigating") setTab("Under Investigation");
+    else if (urlFilter === "resolved") setTab("Resolved");
+    else if (urlFilter === "critical" || urlFilter === "all") setTab("All");
+  }, [urlFilter]);
+
+  const setUrlFilter = useCallback(
+    (filter: UrlFilter) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (filter === "all") params.delete("filter");
+      else params.set("filter", filter);
+      const qs = params.toString();
+      router.replace(qs ? `/reports?${qs}` : "/reports");
+    },
+    [router, searchParams]
+  );
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, setAdminUser);
@@ -97,20 +120,40 @@ export default function ReportTable() {
   }, []);
 
   const filtered = useMemo(() => {
-    return reports.filter((r) => {
+    let list = reports.filter((r) => {
       const matchSearch =
         r.reporterName?.toLowerCase().includes(search.toLowerCase()) ||
         r.hazardType?.toLowerCase().includes(search.toLowerCase()) ||
         r.description?.toLowerCase().includes(search.toLowerCase());
-      const matchTab = tab === "All" || r.status === tab;
       const matchType = typeFilter === "All" || r.hazardType === typeFilter;
       const matchRisk = riskFilter === "All" || r.riskLevel === riskFilter;
       const reportDate = new Date(r.createdAt as string);
       const matchFrom = !dateFrom || reportDate >= new Date(dateFrom);
       const matchTo = !dateTo || reportDate <= new Date(`${dateTo}T23:59:59`);
-      return matchSearch && matchTab && matchType && matchRisk && matchFrom && matchTo;
+      return matchSearch && matchType && matchRisk && matchFrom && matchTo;
     });
-  }, [reports, search, tab, typeFilter, riskFilter, dateFrom, dateTo]);
+
+    if (urlFilter === "critical") {
+      list = list.filter(
+        (r) => isActiveHazard(r) && (r.riskLevel === "High" || r.riskLevel === "Critical")
+      );
+    } else if (urlFilter === "new") {
+      list = list.filter((r) => r.status === "New");
+    } else if (urlFilter === "investigating") {
+      list = list.filter((r) => r.status === "Under Investigation");
+    } else if (urlFilter === "resolved") {
+      list = list.filter((r) => r.status === "Resolved");
+    } else {
+      list = list.filter((r) => tab === "All" || r.status === tab);
+    }
+
+    return [...list].sort((a, b) => {
+      const ra = RISK_ORDER[a.riskLevel as RiskLevel] ?? 4;
+      const rb = RISK_ORDER[b.riskLevel as RiskLevel] ?? 4;
+      if (ra !== rb) return ra - rb;
+      return new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime();
+    });
+  }, [reports, search, tab, typeFilter, riskFilter, dateFrom, dateTo, urlFilter]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { All: reports.length };
@@ -118,9 +161,78 @@ export default function ReportTable() {
     return c;
   }, [reports]);
 
+  async function handleBulkInvestigation() {
+    if (!adminUser || selectedIds.size === 0) return;
+    const targets = filtered.filter(
+      (r) => selectedIds.has(r.id) && r.status === "New"
+    );
+    if (targets.length === 0) {
+      setToast("No selected reports are in New status");
+      return;
+    }
+    if (!confirm(`Mark ${targets.length} report(s) as Under Investigation?`)) return;
+
+    setBulkUpdating(true);
+    try {
+      const { syncUserStats } = await import("@/lib/hazard-service");
+      for (const r of targets) {
+        await updateHazardStatus(r.id, "Under Investigation", adminUser.uid, {
+          adminUid: adminUser.uid,
+          adminEmail: adminUser.email ?? undefined,
+          hazardId: r.id,
+          hazardType: r.hazardType,
+          reporterName: r.reporterName,
+          previousStatus: r.status,
+        });
+        if (r.userId) await syncUserStats(r.userId);
+      }
+      await logBulkStatusChange(adminUser.uid, targets.length, "Under Investigation", {
+        adminEmail: adminUser.email ?? undefined,
+      });
+      setSelectedIds(new Set());
+      setToast(`${targets.length} report(s) marked Under Investigation`);
+    } finally {
+      setBulkUpdating(false);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    const newIds = filtered.filter((r) => r.status === "New").map((r) => r.id);
+    if (newIds.every((id) => selectedIds.has(id))) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => new Set([...prev, ...newIds]));
+    }
+  }
+
+  const selectableNew = filtered.filter((r) => r.status === "New");
+  const allNewSelected =
+    selectableNew.length > 0 && selectableNew.every((r) => selectedIds.has(r.id));
+
   async function handleStatusChange(id: string, status: HazardStatus, userId: string) {
     if (!adminUser) return;
-    await updateHazardStatus(id, status, adminUser.uid);
+    const report = reports.find((r) => r.id === id);
+    await updateHazardStatus(id, status, adminUser.uid, {
+      adminUid: adminUser.uid,
+      adminEmail: adminUser.email ?? undefined,
+      hazardId: id,
+      hazardType: report?.hazardType,
+      reporterName: report?.reporterName,
+      previousStatus: report?.status,
+    });
     if (userId) {
       const { syncUserStats } = await import("@/lib/hazard-service");
       await syncUserStats(userId);
@@ -129,8 +241,15 @@ export default function ReportTable() {
   }
 
   async function handleDelete(id: string, userId: string) {
-    if (!confirm("Delete this hazard report? This cannot be undone.")) return;
-    await deleteHazard(id, userId);
+    if (!adminUser || !confirm("Delete this hazard report? This cannot be undone.")) return;
+    const report = reports.find((r) => r.id === id);
+    await deleteHazard(id, userId, {
+      adminUid: adminUser.uid,
+      adminEmail: adminUser.email ?? undefined,
+      hazardId: id,
+      hazardType: report?.hazardType,
+      reporterName: report?.reporterName,
+    });
     setToast("Report deleted");
   }
 
@@ -145,12 +264,36 @@ export default function ReportTable() {
     <div>
       {toast && <Toast message={toast} onClose={() => setToast("")} />}
 
-      <div className="no-print flex items-center justify-between mb-4 border-b border-fog-200 dark:border-asphalt-800">
-        <div className="flex gap-1">
+      <div className="no-print -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto mb-4">
+        <div className="flex gap-1.5 flex-nowrap min-w-max sm:flex-wrap sm:min-w-0">
+          {QUICK_FILTERS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setUrlFilter(key)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                urlFilter === key
+                  ? "bg-asphalt-950 dark:bg-fog-100 text-white dark:text-asphalt-950 border-transparent"
+                  : "border-fog-200 dark:border-asphalt-700 text-fog-600 dark:text-fog-400 hover:bg-fog-50 dark:hover:bg-asphalt-800"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="no-print overflow-x-auto mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-1 min-w-max sm:min-w-0 sm:flex-wrap border-b border-fog-200 dark:border-asphalt-800">
           {TABS.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => {
+                setTab(t);
+                if (t === "All") setUrlFilter("all");
+                else if (t === "New") setUrlFilter("new");
+                else if (t === "Under Investigation") setUrlFilter("investigating");
+                else if (t === "Resolved") setUrlFilter("resolved");
+              }}
               className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
                 tab === t
                   ? `border-amber-400 ${tabColors[t]}`
@@ -165,6 +308,27 @@ export default function ReportTable() {
           ))}
         </div>
       </div>
+
+      {selectedIds.size > 0 && (
+        <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:static md:z-auto flex items-center gap-3 mb-3 px-4 py-3 md:px-3 md:py-2.5 rounded-none md:rounded-lg bg-amber-50 dark:bg-amber-900/15 border-t md:border border-amber-200 dark:border-amber-900/40 shadow-lg md:shadow-none">
+          <span className="text-xs font-medium text-asphalt-950 dark:text-fog-50">
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={handleBulkInvestigation}
+            disabled={bulkUpdating || !adminUser}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-asphalt-950 dark:bg-fog-100 text-white dark:text-asphalt-950 hover:opacity-90 disabled:opacity-50"
+          >
+            {bulkUpdating ? "Updating…" : "Mark as Under Investigation"}
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-fog-500 hover:text-fog-700 dark:hover:text-fog-300"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
 
       <div className="no-print flex items-center gap-2 mb-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">
@@ -222,7 +386,7 @@ export default function ReportTable() {
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-fog-400">{filtered.length} report{filtered.length !== 1 ? "s" : ""}</span>
           <button
-            onClick={() => exportToCSV(filtered)}
+            onClick={() => exportHazardsCSV(filtered)}
             className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-fog-200 dark:border-asphalt-700 hover:bg-fog-50 dark:hover:bg-asphalt-800 transition-colors text-asphalt-700 dark:text-fog-200"
           >
             <IconDownload size={14} />
@@ -238,40 +402,73 @@ export default function ReportTable() {
         </div>
       </div>
 
-      <div className="border border-fog-200 dark:border-asphalt-800 rounded-xl overflow-hidden bg-white dark:bg-asphalt-900">
+      <div className="border border-fog-200 dark:border-asphalt-800 rounded-xl overflow-hidden bg-white dark:bg-asphalt-900 hidden md:block">
         <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="bg-fog-50 dark:bg-asphalt-800 text-left text-fog-600 dark:text-fog-400 text-xs">
-              <th className="px-4 py-2.5 font-medium w-[9%]">ID</th>
-              <th className="px-4 py-2.5 font-medium w-[12%]">Reporter</th>
-              <th className="px-4 py-2.5 font-medium w-[14%]">Type</th>
-              <th className="px-4 py-2.5 font-medium w-[8%]">Risk</th>
-              <th className="px-4 py-2.5 font-medium w-[22%]">Description</th>
-              <th className="px-4 py-2.5 font-medium w-[11%]">Date</th>
+              <th className="no-print px-3 py-2.5 font-medium w-[4%]">
+                <input
+                  type="checkbox"
+                  checked={allNewSelected}
+                  onChange={toggleSelectAll}
+                  disabled={selectableNew.length === 0}
+                  className="rounded"
+                  aria-label="Select all new reports"
+                />
+              </th>
+              <th className="px-3 py-2.5 font-medium w-[6%]">Photo</th>
+              <th className="px-4 py-2.5 font-medium w-[8%]">ID</th>
+              <th className="px-4 py-2.5 font-medium w-[11%]">Reporter</th>
+              <th className="px-4 py-2.5 font-medium w-[12%]">Type</th>
+              <th className="px-4 py-2.5 font-medium w-[7%]">Risk</th>
+              <th className="px-4 py-2.5 font-medium w-[18%]">Description</th>
+              <th className="px-4 py-2.5 font-medium w-[10%]">Date</th>
               <th className="px-4 py-2.5 font-medium w-[12%]">Status</th>
-              <th className="no-print px-4 py-2.5 font-medium w-[8%] text-right">Act.</th>
+              <th className="no-print px-4 py-2.5 font-medium w-[7%] text-right">Act.</th>
             </tr>
           </thead>
           <tbody>
             {loading &&
               [...Array(4)].map((_, i) => (
                 <tr key={i} className="border-t border-fog-100 dark:border-asphalt-800">
-                  {[...Array(8)].map((_, j) => (
+                  {[...Array(10)].map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-3 bg-fog-100 dark:bg-asphalt-800 rounded animate-pulse" style={{ width: `${50 + (j % 3) * 15}%` }} />
                     </td>
                   ))}
                 </tr>
               ))}
-            {!loading && filtered.length === 0 && (
+            {!loading && reports.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-fog-400 text-xs">
-                  No reports match your filters
+                <td colSpan={10}>
+                  <EmptyState variant="no-data" />
+                </td>
+              </tr>
+            )}
+            {!loading && reports.length > 0 && filtered.length === 0 && (
+              <tr>
+                <td colSpan={10}>
+                  <EmptyState variant="no-results" />
                 </td>
               </tr>
             )}
             {!loading && filtered.map((r) => (
               <tr key={r.id} className="border-t border-fog-100 dark:border-asphalt-800 hover:bg-fog-50 dark:hover:bg-asphalt-800/40 transition-colors group">
+                <td className="no-print px-3 py-2.5">
+                  {r.status === "New" ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(r.id)}
+                      onChange={() => toggleSelect(r.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded"
+                      aria-label={`Select ${r.hazardType}`}
+                    />
+                  ) : null}
+                </td>
+                <td className="px-3 py-2.5">
+                  <HazardThumbnail imageUrl={r.imageUrl} hazardType={r.hazardType} size={40} />
+                </td>
                 <td className="px-4 py-2.5 text-xs font-mono text-fog-400 truncate">{r.id.slice(0, 8)}</td>
                 <td className="px-4 py-2.5 text-xs font-medium text-asphalt-950 dark:text-fog-100 truncate">{r.reporterName}</td>
                 <td className="px-4 py-2.5 text-xs text-fog-600 dark:text-fog-400 truncate">{r.hazardType}</td>
@@ -296,6 +493,34 @@ export default function ReportTable() {
           </tbody>
         </table>
       </div>
+
+      <div className="md:hidden border border-fog-200 dark:border-asphalt-800 rounded-xl overflow-hidden bg-white dark:bg-asphalt-900">
+        {loading &&
+          [...Array(3)].map((_, i) => (
+            <div key={i} className="p-4 border-t border-fog-100 dark:border-asphalt-800 first:border-t-0">
+              <div className="h-16 bg-fog-100 dark:bg-asphalt-800 rounded animate-pulse" />
+            </div>
+          ))}
+        {!loading && reports.length === 0 && <EmptyState variant="no-data" />}
+        {!loading && reports.length > 0 && filtered.length === 0 && <EmptyState variant="no-results" />}
+        {!loading &&
+          filtered.map((r) => (
+            <ReportCard
+              key={r.id}
+              report={r}
+              selected={selectedIds.has(r.id)}
+              onToggleSelect={() => toggleSelect(r.id)}
+              onDelete={() => handleDelete(r.id, r.userId)}
+              statusSelect={
+                <StatusSelect
+                  value={r.status}
+                  onChange={(s) => handleStatusChange(r.id, s, r.userId)}
+                />
+              }
+            />
+          ))}
+      </div>
+      {selectedIds.size > 0 && <div className="md:hidden h-16" aria-hidden />}
     </div>
   );
 }

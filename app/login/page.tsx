@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import LoginForm from "./LoginForm";
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Admin sign in",
+  description: "Sign in to the RoadSense admin dashboard to review and investigate hazard reports.",
+  path: "/login",
+  index: false,
+});
 
 export default function LoginPage() {
   return (

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-asphalt-950: #12151b;
   --color-asphalt-900: #191d25;
@@ -34,6 +36,11 @@
   --color-fog-200: #ddd9d0;
   --color-fog-400: #9b9890;
   --color-fog-600: #5c5a56;
+
+  --color-brand-cyan: #009ee3;
+  --color-brand-orange: #ff6b35;
+  --color-brand-cyan-50: #e6f7fd;
+  --color-brand-orange-50: #fff0eb;
 }
 
 @theme inline {
@@ -51,11 +58,9 @@ body {
   color: var(--color-asphalt-950);
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: var(--color-asphalt-950);
-    color: var(--color-fog-100);
-  }
+.dark body {
+  background-color: var(--color-asphalt-950);
+  color: var(--color-fog-100);
 }
 
 .lane-divider {
@@ -82,6 +87,18 @@ body {
   );
 }
 
+.hero-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--color-brand-cyan) 18%, transparent), transparent),
+    radial-gradient(ellipse 50% 40% at 100% 0%, color-mix(in srgb, var(--color-brand-orange) 12%, transparent), transparent);
+}
+
+.dark .hero-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--color-brand-cyan) 25%, transparent), transparent),
+    radial-gradient(ellipse 50% 40% at 100% 0%, color-mix(in srgb, var(--color-brand-orange) 15%, transparent), transparent);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -102,6 +119,9 @@ body {
 @media print {
   .no-print {
     display: none !important;
+  }
+  .print-only {
+    display: block !important;
   }
   body {
     background: white !important;

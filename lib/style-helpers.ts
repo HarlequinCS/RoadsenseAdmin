@@ -1,5 +1,11 @@
 import { ContributorBadge, HazardStatus, HazardType, RiskLevel } from "./types";
 
+export const statusLabels: Record<HazardStatus, string> = {
+  New: "Awaiting review",
+  "Under Investigation": "In progress",
+  Resolved: "Closed",
+};
+
 export const statusStyles: Record<HazardStatus, { bg: string; fg: string; dot: string }> = {
   New: { bg: "#FAEEDA", fg: "#633806", dot: "#EF9F27" },
   "Under Investigation": { bg: "#FCEBEB", fg: "#791F1F", dot: "#E4572E" },

@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function onlyChangedFields(allowed) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(allowed);
+    }
+
+    // Hazard reports — mobile app creates; admins manage lifecycle
+    match /hazards/{hazardId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['hazardType', 'status', 'createdAt']);
+
+      allow update: if isAdmin()
+        || (
+          isSignedIn()
+          && onlyChangedFields([
+            'verificationCount',
+            'lastVerifiedAt',
+            'verifiedBy',
+            'communityVerifications',
+          ])
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // User profiles — admin dashboard only
+    match /users/{userId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Admin audit trail — append-only
+    match /audit_log/{entryId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

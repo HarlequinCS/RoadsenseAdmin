@@ -7,14 +7,19 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { getAdminDisplayName } from "@/lib/auth";
+import Logo from "@/components/Logo";
+import ThemeToggle from "@/components/ThemeToggle";
+import NotificationToggle from "@/components/NotificationToggle";
 import {
   IconLayoutDashboard,
   IconAlertTriangle,
   IconUsers,
   IconChartBar,
-  IconMapPin,
   IconLogout,
   IconMap2,
+  IconHistory,
+  IconX,
+  IconSearch,
 } from "@tabler/icons-react";
 
 const navItems = [
@@ -23,9 +28,20 @@ const navItems = [
   { href: "/map", label: "Map", icon: IconMap2 },
   { href: "/users", label: "Users", icon: IconUsers },
   { href: "/analytics", label: "Analytics", icon: IconChartBar },
+  { href: "/activity", label: "Activity", icon: IconHistory },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onNavigate?: () => void;
+  onSearchOpenChange?: (open: boolean) => void;
+}
+
+export default function Sidebar({
+  mobileOpen = false,
+  onNavigate,
+  onSearchOpenChange,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [newCount, setNewCount] = useState(0);
@@ -50,6 +66,11 @@ export default function Sidebar() {
 
   async function handleSignOut() {
     setSigningOut(true);
+    try {
+      await fetch("/api/auth/session", { method: "DELETE" });
+    } catch {
+      // Continue signing out locally even if cookie clear fails
+    }
     await signOut(auth);
     router.replace("/login");
   }
@@ -57,24 +78,26 @@ export default function Sidebar() {
   const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="no-print w-[220px] shrink-0 bg-asphalt-950 text-fog-100 flex flex-col min-h-screen sticky top-0">
-      <div className="px-5 pt-6 pb-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-amber-400/15 flex items-center justify-center shrink-0">
-            <IconMapPin size={18} className="text-amber-400" strokeWidth={2.25} />
-          </div>
-          <div className="min-w-0">
-            <p className="font-display font-semibold text-[15px] leading-none text-white tracking-tight">
-              RoadSense
-            </p>
-            <p className="text-[10.5px] text-fog-400 mt-1 tracking-wide">ADMIN DASHBOARD</p>
-          </div>
-        </div>
+    <aside
+      className={`no-print fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-full lg:h-screen w-[260px] lg:w-[220px] shrink-0 bg-asphalt-950 text-fog-100 flex flex-col transition-transform duration-200 ease-out ${
+        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      }`}
+    >
+      <div className="flex items-center justify-between px-5 pt-6 pb-5 lg:block">
+        <Logo size="md" variant="onDark" subtitle="Admin Dashboard" href="/dashboard" />
+        <button
+          type="button"
+          onClick={onNavigate}
+          className="lg:hidden flex items-center justify-center w-10 h-10 rounded-lg text-fog-400 hover:text-fog-100 hover:bg-asphalt-800 transition-colors"
+          aria-label="Close menu"
+        >
+          <IconX size={20} />
+        </button>
       </div>
 
       <div className="mx-5 lane-divider" />
 
-      <nav className="px-3 pt-5 flex flex-col gap-1">
+      <nav className="px-3 pt-5 flex flex-col gap-1 flex-1 overflow-y-auto">
         <p className="text-[10px] font-medium text-fog-400/80 uppercase tracking-wider px-2.5 mb-1.5">
           Navigation
         </p>
@@ -84,7 +107,8 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
-              className={`relative flex items-center justify-between pl-3.5 pr-2.5 py-2.5 rounded-lg text-sm transition-colors ${
+              onClick={onNavigate}
+              className={`relative flex items-center justify-between pl-3.5 pr-2.5 py-2.5 rounded-lg text-sm transition-colors min-h-[44px] ${
                 active
                   ? "bg-asphalt-800 text-white"
                   : "text-fog-400 hover:bg-asphalt-900 hover:text-fog-100"
@@ -105,10 +129,21 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => onSearchOpenChange?.(true)}
+          className="hidden lg:flex items-center gap-2 mx-2 mt-4 mb-2 px-2.5 py-2 rounded-lg text-xs text-fog-400 border border-asphalt-800 hover:border-asphalt-700 hover:text-fog-200 hover:bg-asphalt-900 transition-colors w-[calc(100%-1rem)]"
+        >
+          <IconSearch size={14} />
+          <span className="flex-1 text-left">Search reports…</span>
+        </button>
       </nav>
 
-      <div className="mt-auto px-3 pb-4 pt-3 border-t border-asphalt-800">
-        <div className="flex items-center gap-2.5 px-2.5 py-2 mb-1">
+      <div className="px-3 pb-4 pt-3 border-t border-asphalt-800 shrink-0">
+        <NotificationToggle />
+        <ThemeToggle />
+        <div className="flex items-center gap-2.5 px-2.5 py-2 mb-1 mt-1">
           <div className="w-7 h-7 rounded-full bg-asphalt-700 flex items-center justify-center text-[11px] font-medium text-fog-100">
             {initials}
           </div>
@@ -120,7 +155,7 @@ export default function Sidebar() {
         <button
           onClick={handleSignOut}
           disabled={signingOut}
-          className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-fog-400 hover:text-signal-red-500 hover:bg-signal-red-500/10 transition-colors w-full disabled:opacity-50"
+          className="flex items-center gap-2 px-2.5 py-2.5 rounded-lg text-xs text-fog-400 hover:text-signal-red-500 hover:bg-signal-red-500/10 transition-colors w-full disabled:opacity-50 min-h-[44px]"
         >
           <IconLogout size={14} />
           {signingOut ? "Signing out…" : "Sign out"}

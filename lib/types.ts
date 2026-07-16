@@ -93,3 +93,24 @@ export interface UserStats {
   highRiskReports: number;
   contributorBadge: ContributorBadge;
 }
+
+export type AuditAction =
+  | "status_change"
+  | "bulk_status_change"
+  | "notes_updated"
+  | "hazard_deleted"
+  | "hazard_updated";
+
+export interface AuditLogEntry {
+  id: string;
+  action: AuditAction;
+  hazardId: string;
+  hazardType?: string;
+  reporterName?: string;
+  adminUid: string;
+  adminEmail?: string;
+  previousStatus?: HazardStatus;
+  newStatus?: HazardStatus;
+  details?: string;
+  createdAt: string | Date | { toDate: () => Date };
+}

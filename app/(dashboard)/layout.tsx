@@ -1,13 +1,22 @@
-import Sidebar from "@/components/Sidebar";
+import type { Metadata } from "next";
+import DashboardShell from "@/components/DashboardShell";
 import AuthGuard from "@/components/AuthGuard";
+import { buildPageMetadata } from "@/lib/seo";
+
+import CriticalAlertWatcher from "@/components/CriticalAlertWatcher";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Admin",
+  description: "RoadSense administrative dashboard.",
+  path: "/dashboard",
+  index: false,
+});
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <div className="flex min-h-screen bg-fog-50 dark:bg-asphalt-950">
-        <Sidebar />
-        <main className="flex-1 min-w-0 px-8 py-7 max-w-[1400px]">{children}</main>
-      </div>
+      <CriticalAlertWatcher />
+      <DashboardShell>{children}</DashboardShell>
     </AuthGuard>
   );
 }

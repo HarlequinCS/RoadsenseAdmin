@@ -1,5 +1,4 @@
-export const CLOUDINARY_CLOUD_NAME =
-  process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "ditifn5y3";
+export const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "";
 
 /** Build a Cloudinary thumbnail URL from a full image URL or public path. */
 export function getCloudinaryThumbnail(
