@@ -9,9 +9,10 @@ import { Hazard, HazardStatus, HAZARD_STATUSES, HAZARD_TYPES, RISK_LEVELS, RiskL
 import { formatDate } from "@/lib/style-helpers";
 import { normalizeHazard } from "@/lib/firestore-helpers";
 import { updateHazardStatus, deleteHazard, logBulkStatusChange } from "@/lib/hazard-service";
-import { isActiveHazard } from "@/lib/hazard-utils";
+import { isActiveHazard, isAiScoringPending } from "@/lib/hazard-utils";
 import { exportHazardsCSV } from "@/lib/export-utils";
 import RiskBadge from "@/components/RiskBadge";
+import RiskSourceBadge from "@/components/RiskSourceBadge";
 import EmptyState from "@/components/EmptyState";
 import HazardThumbnail from "@/components/HazardThumbnail";
 import ReportCard from "@/components/ReportCard";
@@ -472,7 +473,16 @@ export default function ReportTable() {
                 <td className="px-4 py-2.5 text-xs font-mono text-fog-400 truncate">{r.id.slice(0, 8)}</td>
                 <td className="px-4 py-2.5 text-xs font-medium text-asphalt-950 dark:text-fog-100 truncate">{r.reporterName}</td>
                 <td className="px-4 py-2.5 text-xs text-fog-600 dark:text-fog-400 truncate">{r.hazardType}</td>
-                <td className="px-4 py-2.5"><RiskBadge risk={r.riskLevel} /></td>
+                <td className="px-4 py-2.5">
+                  <div className="flex flex-col gap-1 items-start">
+                    <RiskBadge risk={r.riskLevel} />
+                    {isAiScoringPending(r) ? (
+                      <span className="text-[10px] text-signal-blue-600 dark:text-signal-blue-400">AI reviewing…</span>
+                    ) : r.riskSource ? (
+                      <RiskSourceBadge source={r.riskSource} />
+                    ) : null}
+                  </div>
+                </td>
                 <td className="px-4 py-2.5 text-xs text-fog-400 truncate">{r.description || "—"}</td>
                 <td className="px-4 py-2.5 text-xs text-fog-400">{formatDate(r.createdAt)}</td>
                 <td className="px-4 py-2.5">

@@ -17,6 +17,9 @@ import {
   IconRoute,
   IconCheck,
   IconPalette,
+  IconSparkles,
+  IconHeart,
+  IconTrophy,
 } from "@tabler/icons-react";
 import { buildPageMetadata, aboutPageJsonLd, organizationJsonLd } from "@/lib/seo";
 import JsonLd from "@/components/seo/JsonLd";
@@ -30,11 +33,21 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 const TECH_STACK = [
-  { icon: IconDeviceMobile, label: "Android (Java + XML)", detail: "Native mobile app with Material Design" },
-  { icon: IconCloud, label: "Firebase", detail: "Auth, Firestore, Cloud Messaging" },
-  { icon: IconMapPins, label: "Google Maps", detail: "Maps SDK, location, marker clustering" },
-  { icon: IconPhoto, label: "Cloudinary", detail: "Hazard photo uploads and delivery" },
-  { icon: IconBell, label: "FCM Push", detail: "Proximity alerts and notifications" },
+  { icon: IconDeviceMobile, label: "Android (Java + XML)", detail: "Native app with Material Design, splash video, and Waze-inspired UI" },
+  { icon: IconCloud, label: "Firebase", detail: "Auth, Firestore, Cloud Messaging, Analytics, and Crashlytics" },
+  { icon: IconSparkles, label: "AI risk scoring", detail: "Rule-based on phone, then AI review with reason, confidence, and push alert" },
+  { icon: IconMapPins, label: "Google Maps", detail: "Maps SDK, location, clustering, and optional heat map layer" },
+  { icon: IconPhoto, label: "Cloudinary", detail: "Compressed hazard photos via unsigned upload preset" },
+  { icon: IconBell, label: "FCM Push", detail: "Multi-device tokens, proximity alerts, and follow notifications" },
+];
+
+const MODULES = [
+  { title: "Authentication", detail: "Email + Google Sign-In, legal gate, onboarding, and profile sync." },
+  { title: "Home dashboard", detail: "Nearby alerts, paginated hazard list, map, pull-to-refresh, and shimmer loading." },
+  { title: "Hazard reporting", detail: "5-step wizard, duplicate warning, offline queue, and celebration success screen." },
+  { title: "Hazard map", detail: "Filters, heat map, premium detail sheet with timeline, share, and navigate." },
+  { title: "User profile", detail: "Badges, stats, My Reports, leaderboard, feedback form, and alert toggles." },
+  { title: "About", detail: "Team credits, ICT602 context, terms, and privacy policy access." },
 ];
 
 const INNOVATIONS = [
@@ -46,15 +59,27 @@ const INNOVATIONS = [
   },
   {
     icon: IconShield,
-    title: "Automatic risk scoring",
+    title: "Rules first, AI second",
     description:
-      "Hazard type, nearby density, and duplicates combine into Low, Medium, High, or Critical — instantly on submit.",
+      "HazardUtils scores instantly by type and nearby density. AI then refines priority with a reason — rule-based stays as fallback.",
+  },
+  {
+    icon: IconHeart,
+    title: "Follow & verify",
+    description:
+      "Confirm hazards still exist, resolve when cleared, or follow reports you did not submit — notifications when status or AI updates.",
   },
   {
     icon: IconPalette,
     title: "Waze-inspired design",
     description:
-      "Cyan for trust, orange for urgency — an interface drivers already associate with real-time road awareness.",
+      "Cyan (#009EE3) for trust, orange (#FF6B35) for urgency — an interface drivers associate with real-time road awareness.",
+  },
+  {
+    icon: IconTrophy,
+    title: "Top reporters leaderboard",
+    description:
+      "Lifetime submission counts rank the top 20 community contributors — badges from New Reporter to Safety Hero.",
   },
   {
     icon: IconCheck,
@@ -122,9 +147,32 @@ export default function AboutPage() {
             </p>
             <p>
               That question became RoadSense: a crowdsourced reporting platform with community
-              verification, automatic risk scoring, push alerts, and this admin dashboard for
-              authorities to investigate and resolve hazards systematically.
+              verification, rules-plus-AI risk scoring, push alerts, offline resilience, and this
+              admin dashboard — where authorities investigate hazards the mobile app cannot set to{" "}
+              <strong className="text-asphalt-950 dark:text-fog-100 font-medium">Under Investigation</strong>.
             </p>
+          </div>
+        </section>
+
+        {/* Six modules */}
+        <section className="max-w-4xl mx-auto px-4 sm:px-6 py-14 sm:py-16">
+          <SectionHeading
+            eyebrow="The product"
+            title="Six modules, one app"
+            subtitle="Each module maps to a major part of the driver experience — from first sign-in to community recognition."
+          />
+          <div className="grid sm:grid-cols-2 gap-4">
+            {MODULES.map(({ title, detail }) => (
+              <div
+                key={title}
+                className="p-4 rounded-xl border border-fog-200 dark:border-asphalt-800 bg-white dark:bg-asphalt-900"
+              >
+                <p className="font-display font-semibold text-sm text-asphalt-950 dark:text-fog-50 mb-1.5">
+                  {title}
+                </p>
+                <p className="text-xs text-fog-600 dark:text-fog-400 leading-relaxed">{detail}</p>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -163,7 +211,7 @@ export default function AboutPage() {
             eyebrow="What makes it different"
             title="Innovation highlights"
           />
-          <div className="grid sm:grid-cols-2 gap-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {INNOVATIONS.map(({ icon: Icon, title, description }) => (
               <div
                 key={title}
@@ -208,11 +256,37 @@ export default function AboutPage() {
             <dl className="divide-y divide-fog-100 dark:divide-asphalt-800 text-sm">
               <FactRow label="Institution" value="Universiti Teknologi MARA (UiTM)" />
               <FactRow label="Course" value="ICT602 Mobile Programming" />
-              <FactRow label="Project type" value="Group Project" />
-              <FactRow label="Status" value="Feature-complete (July 2026)" />
-              <FactRow label="Platforms" value="Android mobile app + Web admin dashboard" />
-              <FactRow label="Backend" value="Firebase (Auth, Firestore, FCM)" />
+              <FactRow label="Project type" value="Group Project — Crowdsourced Road Hazard Reporting" />
+              <FactRow label="Status" value="Feature-complete (17 July 2026)" />
+              <FactRow label="Platforms" value="Android app + Web admin dashboard" />
+              <FactRow label="Backend" value="Firebase (Auth, Firestore, FCM, Analytics, Crashlytics)" />
+              <FactRow label="Collections" value="users · hazards · feedback" />
+              <FactRow label="Languages" value="English + Bahasa Malaysia (key UI strings)" />
             </dl>
+          </div>
+        </section>
+
+        {/* Human impact */}
+        <section className="bg-brand-cyan-50 dark:bg-brand-cyan/10 border-y border-brand-cyan/20">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-14 sm:py-16">
+            <SectionHeading
+              eyebrow="Why it matters"
+              title="A driver who knows can protect a driver who does not"
+            />
+            <div className="space-y-4 text-sm text-fog-600 dark:text-fog-400 leading-relaxed">
+              <p>
+                A student sees the orange alert card: potholes within 3 km. She slows down. Her
+                classmate never hits the same crater that cracked a rim last week.
+              </p>
+              <p>
+                A motorcyclist reports flooding after a storm. Forty confirmations later, the
+                verification count rises in this admin dashboard — evidence authorities can act on.
+              </p>
+              <p>
+                None of it requires a hotline. It requires a phone, a community, and an app that
+                makes reporting faster than complaining.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -232,9 +306,13 @@ export default function AboutPage() {
         <section className="max-w-4xl mx-auto px-4 sm:px-6 py-14 sm:py-16">
           <blockquote className="text-center">
             <p className="font-display text-lg sm:text-xl text-asphalt-950 dark:text-fog-50 leading-relaxed italic max-w-2xl mx-auto">
-              Four students at UiTM looked at a problem every driver knows and asked:
-              Can we build something that helps? They did.
+              RoadSense started as a university assignment. It became a working Android application
+              with a live cloud backend, AI-assisted risk scoring, community verification, push alerts,
+              and the admin platform that completes the ecosystem.
             </p>
+            <footer className="mt-4 text-sm text-fog-500">
+              Four students at UiTM asked: <em>Can we build something that helps?</em> They did.
+            </footer>
           </blockquote>
         </section>
       </main>

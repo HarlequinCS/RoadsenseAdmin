@@ -1,4 +1,4 @@
-import { ContributorBadge, HazardStatus, HazardType, RiskLevel } from "./types";
+import { AiScoringStatus, ContributorBadge, HazardStatus, HazardType, RiskLevel, RiskSource } from "./types";
 
 export const statusLabels: Record<HazardStatus, string> = {
   New: "Awaiting review",
@@ -87,6 +87,22 @@ export function getHazardTypeColor(type: string): string {
 
 export function getRiskStyle(risk: string): { bg: string; fg: string } {
   return riskLevelStyles[risk as RiskLevel] || { bg: "#EFEEE8", fg: "#5C5A56" };
+}
+
+export const riskSourceStyles: Record<RiskSource, { bg: string; fg: string; label: string }> = {
+  rules: { bg: "#EFEEE8", fg: "#5C5A56", label: "Rules" },
+  ai: { bg: "#E6F1FB", fg: "#0C447C", label: "AI" },
+  admin: { bg: "#FAEEDA", fg: "#633806", label: "Admin" },
+};
+
+export const aiScoringStatusLabels: Record<AiScoringStatus, string> = {
+  pending: "AI reviewing…",
+  complete: "AI scored",
+  failed: "AI failed",
+};
+
+export function getRiskSourceStyle(source: string | undefined): { bg: string; fg: string; label: string } {
+  return riskSourceStyles[source as RiskSource] || riskSourceStyles.rules;
 }
 
 export function getContributorStyle(badge: string): { bg: string; fg: string } {

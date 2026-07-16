@@ -21,6 +21,10 @@ export function exportHazardsCSV(reports: Hazard[], filenamePrefix = "roadsense-
     "Reporter",
     "Hazard Type",
     "Risk",
+    "Risk Source",
+    "AI Status",
+    "Rule-based Risk",
+    "AI Risk",
     "Description",
     "Latitude",
     "Longitude",
@@ -33,6 +37,10 @@ export function exportHazardsCSV(reports: Hazard[], filenamePrefix = "roadsense-
     r.reporterName || "",
     r.hazardType || "",
     r.riskLevel || "",
+    r.riskSource || "",
+    r.aiScoringStatus || "",
+    r.ruleBasedRiskLevel || "",
+    r.aiRiskLevel || "",
     r.description || "",
     String(r.latitude ?? ""),
     String(r.longitude ?? ""),
@@ -83,6 +91,12 @@ export function exportReportText(report: {
   reporterName: string;
   hazardType: string;
   riskLevel: string;
+  ruleBasedRiskLevel?: string;
+  aiRiskLevel?: string;
+  aiReason?: string;
+  aiConfidence?: number;
+  riskSource?: string;
+  aiScoringStatus?: string;
   description: string;
   latitude: number;
   longitude: number;
@@ -99,6 +113,14 @@ export function exportReportText(report: {
     `Reporter: ${report.reporterName}`,
     `Hazard Type: ${report.hazardType}`,
     `Risk Level: ${report.riskLevel}`,
+    `Risk Source: ${report.riskSource || "—"}`,
+    `AI Status: ${report.aiScoringStatus || "—"}`,
+    `Rule-based Risk: ${report.ruleBasedRiskLevel || "—"}`,
+    `AI Risk: ${report.aiRiskLevel || "—"}`,
+    report.aiConfidence != null
+      ? `AI Confidence: ${Math.round(report.aiConfidence <= 1 ? report.aiConfidence * 100 : report.aiConfidence)}%`
+      : "AI Confidence: —",
+    `AI Reason: ${report.aiReason || "—"}`,
     `Description: ${report.description}`,
     `Location: ${report.address || "—"}`,
     `Coordinates: ${report.latitude}, ${report.longitude}`,

@@ -12,7 +12,7 @@ import { db } from "./firebase";
 import { logAuditEntry, AuditContext } from "./audit-service";
 import { computeUserStats } from "./hazard-utils";
 import { normalizeHazard } from "./firestore-helpers";
-import { Hazard, HazardStatus } from "./types";
+import { Hazard, HazardStatus, RiskLevel } from "./types";
 
 async function fetchHazardsForUser(userId: string): Promise<Hazard[]> {
   const snap = await getDocs(
@@ -106,6 +106,35 @@ export async function logBulkStatusChange(
     details: `Marked ${count} report(s) as ${newStatus}`,
     ...audit,
   });
+}
+
+export async function updateHazardRiskLevel(
+  hazardId: string,
+  riskLevel: RiskLevel,
+  adminUid: string,
+  reporterUserId: string,
+  audit?: AuditContext
+): Promise<void> {
+  await updateDoc(doc(db, "hazards", hazardId), {
+    riskLevel,
+    riskSource: "admin",
+    aiScoringStatus: "complete",
+    adminUpdatedAt: serverTimestamp(),
+    adminUpdatedBy: adminUid,
+  });
+
+  if (audit) {
+    await logAuditEntry("risk_override", {
+      ...audit,
+      adminUid,
+      hazardId,
+      details: `Admin set priority to ${riskLevel}`,
+    });
+  }
+
+  if (reporterUserId) {
+    await syncUserStats(reporterUserId);
+  }
 }
 
 export async function saveHazardAndSyncStats(

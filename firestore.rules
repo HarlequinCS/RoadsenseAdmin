@@ -15,7 +15,8 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly(allowed);
     }
 
-    // Hazard reports — mobile app creates; admins manage lifecycle
+    // Hazard reports — mobile app creates with rule-based + AI pending fields;
+    // Cloud Function (Admin SDK) writes AI scores; admins can override priority.
     match /hazards/{hazardId} {
       allow read: if isSignedIn();
 
@@ -45,6 +46,13 @@ service cloud.firestore {
     // Admin audit trail — append-only
     match /audit_log/{entryId} {
       allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // In-app feedback — mobile users create; admins read
+    match /feedback/{feedbackId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
       allow update, delete: if false;
     }
 

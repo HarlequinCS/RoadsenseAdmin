@@ -54,6 +54,8 @@ export function describeAuditAction(entry: {
       return "Deleted hazard report";
     case "hazard_updated":
       return entry.details ?? "Updated hazard details";
+    case "risk_override":
+      return entry.details ?? "Overrode hazard priority";
     default:
       return entry.details ?? "Admin action";
   }

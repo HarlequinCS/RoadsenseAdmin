@@ -40,37 +40,37 @@ const HIGHLIGHTS = [
   {
     icon: IconMapPin,
     title: "Real-time hazard map",
-    description: "Clustered markers, filters, and a map that follows you as you drive.",
+    description: "Clustered markers, heat map overlay, filters, and a map that follows you as you drive.",
     tone: "cyan" as const,
   },
   {
     icon: IconAlertTriangle,
-    title: "Automatic risk scoring",
-    description: "Every report is rated Low to Critical based on type and nearby hazards.",
+    title: "Rules + AI risk scoring",
+    description: "Rule-based priority on submit, then AI review with reason and confidence — push alert when scoring completes.",
     tone: "orange" as const,
   },
   {
     icon: IconBell,
     title: "Proximity alerts",
-    description: "Push notifications and in-app prompts when hazards are within 150 m.",
+    description: "FCM push and in-app prompts at 150 m — foreground dialog on Home/Map, notifications in background.",
     tone: "cyan" as const,
   },
   {
     icon: IconUsers,
-    title: "Contributor badges",
-    description: "Recognise active reporters — from New Reporter to Safety Hero.",
+    title: "Community verification",
+    description: "Confirm still there, resolve when fixed, follow hazards for updates, and climb the top-reporters leaderboard.",
     tone: "teal" as const,
   },
   {
     icon: IconLogin,
     title: "Easy sign-in",
-    description: "Email registration or Google Sign-In — your profile syncs across sessions.",
+    description: "Email or Google Sign-In, legal agreement gate, onboarding tour, and profile stats that sync from Firestore.",
     tone: "cyan" as const,
   },
   {
     icon: IconShieldCheck,
-    title: "Privacy & terms",
-    description: "Legal agreement gate on first launch — transparent terms and privacy policy.",
+    title: "Offline & inclusive",
+    description: "Reports queue offline and upload when back online. Bahasa Malaysia strings and dark mode included.",
     tone: "teal" as const,
   },
 ];
@@ -79,25 +79,25 @@ const STEPS = [
   {
     step: "01",
     title: "Report",
-    description: "A guided 5-step wizard — choose type, add a photo, confirm GPS, and submit in under a minute.",
+    description: "A guided 5-step wizard — type, description, photo, GPS, review. Duplicate check, offline queue, Cloudinary upload.",
     icon: IconCamera,
   },
   {
     step: "02",
     title: "Alert",
-    description: "Nearby drivers see hazards on the home dashboard and full-screen map within 5 km.",
+    description: "Nearby drivers see hazards on the home dashboard and full-screen map — paginated list within 5 km, pull-to-refresh.",
     icon: IconBell,
   },
   {
     step: "03",
     title: "Verify",
-    description: "The community confirms hazards still exist or marks them resolved — especially within 150 m.",
+    description: "Confirm still there, resolve when fixed, or get asked at 150 m — drivers maintain the map without forms.",
     icon: IconCheck,
   },
   {
     step: "04",
     title: "Act",
-    description: "Authorities investigate via this admin platform — status updates flow back to the community.",
+    description: "Authorities set Under Investigation, override AI priority, and resolve — updates flow to every device in real time.",
     icon: IconBuildingCommunity,
   },
 ];
@@ -266,9 +266,10 @@ export default function HomePage() {
                 The admin platform behind the community
               </h2>
               <p className="text-sm text-fog-400 leading-relaxed mb-6">
-                This website is the authority-facing half of RoadSense. Review hazard queues,
-                investigate reports on the map, track analytics, and use AI-assisted triage —
-                all synced in real time with the mobile app.
+                The authority-facing half of RoadSense. Review the hazard queue, set{" "}
+                <strong className="text-fog-200">Under Investigation</strong>, investigate on the map,
+                track analytics, view AI assessments, and use Groq-assisted triage — all synced live
+                with the Android app via Firestore listeners.
               </p>
               <Link
                 href="/login"

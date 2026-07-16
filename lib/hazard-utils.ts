@@ -189,3 +189,43 @@ export function formatDurationHours(hours: number | null): string {
   const remHrs = Math.round(hours % 24);
   return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
 }
+
+/** Normalize Cloud Function / mobile status strings to admin panel values. */
+export function normalizeAiScoringStatus(
+  value: unknown
+): Hazard["aiScoringStatus"] | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const v = value.trim().toLowerCase();
+  if (v === "pending") return "pending";
+  if (v === "complete" || v === "completed" || v === "done" || v === "success") {
+    return "complete";
+  }
+  if (v === "failed" || v === "error") return "failed";
+  return value as Hazard["aiScoringStatus"];
+}
+
+/** True while AI scoring is still expected (spinner should show). */
+export function isAiScoringPending(
+  hazard: Pick<
+    Hazard,
+    "aiScoringStatus" | "riskSource" | "aiRiskLevel" | "aiScoredAt" | "aiReason"
+  >
+): boolean {
+  const status = normalizeAiScoringStatus(hazard.aiScoringStatus);
+  if (status === "failed" || status === "complete") return false;
+  // Cloud Function may set AI fields before status string (or use a different value).
+  if (hazard.riskSource === "ai" && (hazard.aiRiskLevel || hazard.aiReason || hazard.aiScoredAt)) {
+    return false;
+  }
+  return status === "pending";
+}
+
+export function isAiScoringStuck(
+  hazard: Pick<Hazard, "aiScoringStatus" | "riskSource" | "aiRiskLevel" | "aiScoredAt" | "aiReason" | "createdAt">,
+  thresholdSeconds = 60
+): boolean {
+  if (!isAiScoringPending(hazard)) return false;
+  const created = toDate(hazard.createdAt);
+  if (!created) return false;
+  return (Date.now() - created.getTime()) / 1000 > thresholdSeconds;
+}

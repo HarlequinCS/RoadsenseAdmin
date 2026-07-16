@@ -222,10 +222,12 @@ export default function UsersContent() {
                               <p>{u.highRiskReports}</p>
                             </div>
                           )}
-                          {u.fcmToken && (
+                          {(u.fcmTokens?.length ?? 0) > 0 && (
                             <div className="col-span-2">
                               <p className="text-[10px] text-fog-400 mb-0.5">Push notifications</p>
-                              <p className="text-[10px] text-signal-teal-600 dark:text-signal-teal-100">Registered</p>
+                              <p className="text-[10px] text-signal-teal-600 dark:text-signal-teal-100">
+                                {u.fcmTokens!.length} device{u.fcmTokens!.length !== 1 ? "s" : ""} registered
+                              </p>
                             </div>
                           )}
                         </div>

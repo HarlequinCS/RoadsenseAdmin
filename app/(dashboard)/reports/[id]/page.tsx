@@ -3,20 +3,23 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
-import { Hazard, HazardStatus, HazardType, HAZARD_STATUSES, HAZARD_TYPES, AppUser } from "@/lib/types";
+import { Hazard, HazardStatus, HazardType, HAZARD_STATUSES, HAZARD_TYPES, AppUser, RiskLevel } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/style-helpers";
 import { normalizeHazard, normalizeUser } from "@/lib/firestore-helpers";
 import { findPotentialDuplicates } from "@/lib/hazard-utils";
-import { saveHazardAndSyncStats, deleteHazard, saveAdminNotes } from "@/lib/hazard-service";
+import { saveHazardAndSyncStats, deleteHazard, saveAdminNotes, updateHazardRiskLevel } from "@/lib/hazard-service";
 import { exportReportText } from "@/lib/export-utils";
 import { getCloudinaryThumbnail } from "@/lib/cloudinary";
 import StatusBadge from "@/components/StatusBadge";
 import RiskBadge from "@/components/RiskBadge";
+import RiskSourceBadge from "@/components/RiskSourceBadge";
+import AiScoringPanel from "@/components/AiScoringPanel";
 import ContributorBadgePill from "@/components/ContributorBadge";
 import AiTriagePanel from "@/components/AiTriagePanel";
+import PushNotificationPanel from "@/components/PushNotificationPanel";
 import {
   IconPrinter, IconDownload, IconArrowLeft, IconTrash, IconAlertTriangle,
 } from "@tabler/icons-react";
@@ -52,6 +55,8 @@ export default function ReportDetailPage() {
   const [adminNotes, setAdminNotes] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingOverride, setSavingOverride] = useState(false);
+  const [overrideRisk, setOverrideRisk] = useState<RiskLevel>("Medium");
   const [adminUser, setAdminUser] = useState<User | null>(null);
 
   const { address, loading: geocoding } = useReverseGeocode(report?.latitude, report?.longitude);
@@ -62,26 +67,32 @@ export default function ReportDetailPage() {
   }, []);
 
   useEffect(() => {
-    async function load() {
-      const snap = await getDoc(doc(db, "hazards", id));
-      if (snap.exists()) {
-        const data = normalizeHazard(snap.id, snap.data());
-        setReport(data);
-        setStatus(data.status);
-        setHazardType(data.hazardType as HazardType);
-        setDescription(data.description);
-        setAdminNotes(data.adminNotes || "");
+    const unsub = onSnapshot(doc(db, "hazards", id), (snap) => {
+      if (!snap.exists()) return;
+      const data = normalizeHazard(snap.id, snap.data());
+      setReport(data);
+      setStatus(data.status);
+      setHazardType(data.hazardType as HazardType);
+      setDescription(data.description);
+      setAdminNotes(data.adminNotes || "");
+      setOverrideRisk((data.riskLevel as RiskLevel) || "Medium");
+    });
+    return () => unsub();
+  }, [id]);
 
-        if (data.userId) {
-          const userSnap = await getDoc(doc(db, "users", data.userId));
-          if (userSnap.exists()) {
-            setReporter(normalizeUser(userSnap.id, userSnap.data()));
-          }
-        }
+  useEffect(() => {
+    if (!report?.userId) return;
+    let cancelled = false;
+    async function loadReporter() {
+      const { getDoc } = await import("firebase/firestore");
+      const userSnap = await getDoc(doc(db, "users", report!.userId));
+      if (!cancelled && userSnap.exists()) {
+        setReporter(normalizeUser(userSnap.id, userSnap.data()));
       }
     }
-    load();
-  }, [id]);
+    loadReporter();
+    return () => { cancelled = true; };
+  }, [report?.userId]);
 
   useEffect(() => {
     async function loadDuplicates() {
@@ -122,6 +133,26 @@ export default function ReportDetailPage() {
       });
     }
     setReport({ ...report, status, hazardType, description, adminNotes });
+    if (status !== report.status) {
+      try {
+        const token = await adminUser.getIdToken();
+        await fetch("/api/notifications/send", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            template: "status_change",
+            hazardId: id,
+            status,
+            body: `${report.hazardType} report is now: ${status}`,
+          }),
+        });
+      } catch {
+        // Non-blocking if FCM not configured
+      }
+    }
     setSaving(false);
     setEditing(false);
   }
@@ -146,6 +177,25 @@ export default function ReportDetailPage() {
     setEditing(false);
   }
 
+  async function handleRiskOverride() {
+    if (!report || !adminUser) return;
+    setSavingOverride(true);
+    await updateHazardRiskLevel(
+      id,
+      overrideRisk,
+      adminUser.uid,
+      report.userId,
+      {
+        adminUid: adminUser.uid,
+        adminEmail: adminUser.email ?? undefined,
+        hazardId: id,
+        hazardType: report.hazardType,
+        reporterName: report.reporterName,
+      }
+    );
+    setSavingOverride(false);
+  }
+
   function handleDownload() {
     if (!report) return;
     exportReportText({
@@ -153,6 +203,12 @@ export default function ReportDetailPage() {
       reporterName: report.reporterName,
       hazardType: report.hazardType,
       riskLevel: report.riskLevel,
+      ruleBasedRiskLevel: report.ruleBasedRiskLevel,
+      aiRiskLevel: report.aiRiskLevel,
+      aiReason: report.aiReason,
+      aiConfidence: report.aiConfidence,
+      riskSource: report.riskSource,
+      aiScoringStatus: report.aiScoringStatus,
       description: report.description,
       latitude: report.latitude,
       longitude: report.longitude,
@@ -187,9 +243,10 @@ export default function ReportDetailPage() {
             #{report.id.slice(0, 8)}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <StatusBadge status={report.status} />
           <RiskBadge risk={report.riskLevel} />
+          {report.riskSource && <RiskSourceBadge source={report.riskSource} />}
           <div className="no-print flex items-center gap-1.5">
             <button onClick={() => window.print()} aria-label="Print" className="p-1.5 rounded-md border border-fog-200 dark:border-asphalt-700 hover:bg-fog-50 dark:hover:bg-asphalt-800 transition-colors">
               <IconPrinter size={15} />
@@ -261,8 +318,10 @@ export default function ReportDetailPage() {
           </div>
 
           <Field label="Coordinates" value={`${report.latitude}, ${report.longitude}`} mono />
-          <Field label="Risk level" value={report.riskLevel} />
           <Field label="Community verifications" value={`${report.verificationCount} confirmation${report.verificationCount !== 1 ? "s" : ""}`} />
+          {(report.followers?.length ?? 0) > 0 && (
+            <Field label="Followers" value={`${report.followers!.length} user${report.followers!.length !== 1 ? "s" : ""} following updates`} />
+          )}
           <Field label="Date submitted" value={formatDateTime(report.createdAt)} />
           {report.statusUpdatedAt && <Field label="Status updated" value={formatDateTime(report.statusUpdatedAt)} />}
           {report.resolvedBy && <Field label="Resolved by" value={report.resolvedBy.slice(0, 12) + "…"} mono />}
@@ -309,6 +368,14 @@ export default function ReportDetailPage() {
         </div>
 
         <div className="space-y-4">
+          <AiScoringPanel
+            hazard={report}
+            overrideRisk={overrideRisk}
+            onOverrideRiskChange={setOverrideRisk}
+            onOverrideSave={handleRiskOverride}
+            savingOverride={savingOverride}
+          />
+
           <AiTriagePanel
             adminUser={adminUser}
             hazard={{
@@ -328,6 +395,13 @@ export default function ReportDetailPage() {
               imageUrl: report.imageUrl,
             }}
             onInsertNote={(note) => setAdminNotes((prev) => (prev ? `${prev}\n\n${note}` : note))}
+          />
+
+          <PushNotificationPanel
+            userId={report.userId}
+            hazardId={report.id}
+            defaultTitle="Hazard update"
+            compact
           />
 
           {reporter && (

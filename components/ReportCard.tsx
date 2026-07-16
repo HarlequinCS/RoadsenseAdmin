@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Hazard } from "@/lib/types";
 import { formatDate } from "@/lib/style-helpers";
+import { isAiScoringPending } from "@/lib/hazard-utils";
 import HazardThumbnail from "@/components/HazardThumbnail";
 import RiskBadge from "@/components/RiskBadge";
+import RiskSourceBadge from "@/components/RiskSourceBadge";
 import { IconEye, IconTrash } from "@tabler/icons-react";
 
 interface ReportCardProps {
@@ -38,7 +40,14 @@ export default function ReportCard({
             <p className="font-medium text-sm text-asphalt-950 dark:text-fog-50 truncate">
               {report.hazardType}
             </p>
-            <RiskBadge risk={report.riskLevel} />
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <RiskBadge risk={report.riskLevel} />
+              {isAiScoringPending(report) ? (
+                <span className="text-[10px] text-signal-blue-600 dark:text-signal-blue-400">AI reviewing…</span>
+              ) : report.riskSource ? (
+                <RiskSourceBadge source={report.riskSource} />
+              ) : null}
+            </div>
           </div>
           <p className="text-xs text-fog-500 truncate">{report.reporterName}</p>
           <p className="text-[11px] text-fog-400 mt-1">{formatDate(report.createdAt)}</p>

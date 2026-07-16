@@ -18,6 +18,8 @@ import {
   IconLogout,
   IconMap2,
   IconHistory,
+  IconMessage,
+  IconBell,
   IconX,
   IconSearch,
 } from "@tabler/icons-react";
@@ -27,6 +29,8 @@ const navItems = [
   { href: "/reports", label: "Reports", icon: IconAlertTriangle, badge: true },
   { href: "/map", label: "Map", icon: IconMap2 },
   { href: "/users", label: "Users", icon: IconUsers },
+  { href: "/feedback", label: "Feedback", icon: IconMessage },
+  { href: "/notifications", label: "Notifications", icon: IconBell },
   { href: "/analytics", label: "Analytics", icon: IconChartBar },
   { href: "/activity", label: "Activity", icon: IconHistory },
 ];

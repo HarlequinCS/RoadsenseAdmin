@@ -10,6 +10,10 @@ export type HazardStatus = "New" | "Under Investigation" | "Resolved";
 
 export type RiskLevel = "Low" | "Medium" | "High" | "Critical";
 
+export type RiskSource = "rules" | "ai" | "admin";
+
+export type AiScoringStatus = "pending" | "complete" | "failed";
+
 export type Gender = "Male" | "Female" | "Other" | "Prefer not to say";
 
 export type ContributorBadge =
@@ -46,6 +50,13 @@ export interface Hazard {
   longitude: number;
   status: HazardStatus;
   riskLevel: RiskLevel | string;
+  ruleBasedRiskLevel?: RiskLevel | string;
+  aiRiskLevel?: RiskLevel | string;
+  aiReason?: string;
+  aiConfidence?: number;
+  riskSource?: RiskSource | string;
+  aiScoringStatus?: AiScoringStatus | string;
+  aiScoredAt?: string | Date | { toDate: () => Date };
   verificationCount: number;
   verifiedBy: string[];
   createdAt: string | Date | { toDate: () => Date };
@@ -55,6 +66,7 @@ export interface Hazard {
   adminNotes?: string;
   adminUpdatedAt?: string | Date | { toDate: () => Date };
   adminUpdatedBy?: string;
+  followers?: string[];
   /** Legacy alias for hazardType */
   type?: string;
   /** Legacy alias for description */
@@ -74,6 +86,7 @@ export interface AppUser {
   highRiskReports?: number;
   contributorBadge?: ContributorBadge | string;
   fcmToken?: string;
+  fcmTokens?: string[];
   fcmTokenUpdatedAt?: string | Date | { toDate: () => Date };
 }
 
@@ -99,7 +112,8 @@ export type AuditAction =
   | "bulk_status_change"
   | "notes_updated"
   | "hazard_deleted"
-  | "hazard_updated";
+  | "hazard_updated"
+  | "risk_override";
 
 export interface AuditLogEntry {
   id: string;
@@ -112,5 +126,17 @@ export interface AuditLogEntry {
   previousStatus?: HazardStatus;
   newStatus?: HazardStatus;
   details?: string;
+  createdAt: string | Date | { toDate: () => Date };
+}
+
+export interface FeedbackEntry {
+  id: string;
+  userId?: string;
+  userName?: string;
+  email?: string;
+  message: string;
+  rating?: number;
+  category?: string;
+  appVersion?: string;
   createdAt: string | Date | { toDate: () => Date };
 }

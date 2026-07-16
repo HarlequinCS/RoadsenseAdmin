@@ -4,6 +4,7 @@ import AuthGuard from "@/components/AuthGuard";
 import { buildPageMetadata } from "@/lib/seo";
 
 import CriticalAlertWatcher from "@/components/CriticalAlertWatcher";
+import PendingHazardScorer from "@/components/PendingHazardScorer";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Admin",
@@ -16,6 +17,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <AuthGuard>
       <CriticalAlertWatcher />
+      <PendingHazardScorer />
       <DashboardShell>{children}</DashboardShell>
     </AuthGuard>
   );

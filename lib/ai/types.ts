@@ -65,3 +65,19 @@ export interface PhotoAnalysisResult {
   additionalObservations: string;
   confidenceNote: string;
 }
+
+export interface HazardScoreInput {
+  hazardType: string;
+  description?: string;
+  riskLevel?: string;
+  ruleBasedRiskLevel?: string;
+  latitude?: number;
+  longitude?: number;
+  imageUrl?: string;
+}
+
+export interface HazardScoreResult {
+  riskLevel: "Low" | "Medium" | "High" | "Critical";
+  reason: string;
+  confidence: number;
+}
