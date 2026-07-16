@@ -6,9 +6,42 @@ import { db } from "@/lib/firebase";
 import { IconDatabase, IconCheck } from "@tabler/icons-react";
 
 const SAMPLE_USERS = [
-  { uid: "seed-u1", fullName: "Aiman Zaki", email: "aiman@student.uitm.edu.my", role: "admin", totalReports: 3, resolvedReports: 1 },
-  { uid: "seed-u2", fullName: "Nisa Rahman", email: "nisa@student.uitm.edu.my", role: "user", totalReports: 2, resolvedReports: 2 },
-  { uid: "seed-u3", fullName: "Iqbal Hakim", email: "iqbal@student.uitm.edu.my", role: "user", totalReports: 1, resolvedReports: 0 },
+  {
+    uid: "seed-u1",
+    fullName: "Ahmad bin Ali",
+    email: "ahmad@example.com",
+    birthday: "2000-05-20",
+    gender: "Male",
+    totalReports: 2,
+    resolvedReports: 1,
+    verifiedReports: 3,
+    highRiskReports: 1,
+    contributorBadge: "Active Reporter",
+  },
+  {
+    uid: "seed-u2",
+    fullName: "Nurul Jannah",
+    email: "nurul@example.com",
+    birthday: "2001-03-15",
+    gender: "Female",
+    totalReports: 1,
+    resolvedReports: 0,
+    verifiedReports: 1,
+    highRiskReports: 0,
+    contributorBadge: "Active Reporter",
+  },
+  {
+    uid: "seed-u3",
+    fullName: "Aiman Mohd",
+    email: "aiman@example.com",
+    birthday: "1999-11-08",
+    gender: "Male",
+    totalReports: 0,
+    resolvedReports: 1,
+    verifiedReports: 2,
+    highRiskReports: 0,
+    contributorBadge: "Active Reporter",
+  },
 ];
 
 function daysAgo(n: number) {
@@ -18,13 +51,110 @@ function daysAgo(n: number) {
 }
 
 const SAMPLE_HAZARDS = [
-  { userId: "seed-u1", reporterName: "Aiman Zaki", hazardType: "Pothole", description: "Deep pothole near junction, damaging tires", latitude: 2.1896, longitude: 102.2501, status: "New", createdAt: daysAgo(2), imageUrl: "https://placehold.co/600x400/E4572E/white?text=Pothole+Photo" },
-  { userId: "seed-u2", reporterName: "Nisa Rahman", hazardType: "Flood", description: "Road flooded ankle-deep after storm", latitude: 2.1935, longitude: 102.2470, status: "Under Investigation", createdAt: daysAgo(15), imageUrl: "https://placehold.co/600x400/3D6FB4/white?text=Flood+Photo" },
-  { userId: "seed-u1", reporterName: "Aiman Zaki", hazardType: "Traffic Accident", description: "Minor collision blocking left lane", latitude: 2.1802, longitude: 102.2555, status: "Resolved", createdAt: daysAgo(40), imageUrl: "" },
-  { userId: "seed-u3", reporterName: "Iqbal Hakim", hazardType: "Fallen Tree", description: "Branch blocking one lane after wind", latitude: 2.1950, longitude: 102.2490, status: "New", createdAt: daysAgo(5), imageUrl: "https://placehold.co/600x400/3B6D11/white?text=Fallen+Tree+Photo" },
-  { userId: "seed-u2", reporterName: "Nisa Rahman", hazardType: "Pothole", description: "Cluster of small potholes after heavy rain", latitude: 2.1870, longitude: 102.2530, status: "Resolved", createdAt: daysAgo(70), imageUrl: "" },
-  { userId: "seed-u1", reporterName: "Aiman Zaki", hazardType: "Damaged Road Sign", description: "Stop sign bent and hard to read", latitude: 2.1910, longitude: 102.2515, status: "Under Investigation", createdAt: daysAgo(25), imageUrl: "https://placehold.co/600x400/7F77DD/white?text=Road+Sign+Photo" },
-  { userId: "seed-u2", reporterName: "Nisa Rahman", hazardType: "Broken Traffic Light", description: "Signal stuck on red for over an hour", latitude: 2.1885, longitude: 102.2480, status: "New", createdAt: daysAgo(1), imageUrl: "" },
+  {
+    userId: "seed-u1",
+    reporterName: "Ahmad bin Ali",
+    hazardType: "Pothole",
+    description: "Large pothole near junction, damaged two tyres this week",
+    latitude: 3.0738,
+    longitude: 101.5183,
+    status: "New",
+    riskLevel: "Medium",
+    verificationCount: 2,
+    verifiedBy: ["seed-u2", "seed-u3"],
+    createdAt: daysAgo(2),
+    imageUrl: "https://res.cloudinary.com/ditifn5y3/image/upload/w_400,h_300,c_fill/sample/pothole.jpg",
+  },
+  {
+    userId: "seed-u2",
+    reporterName: "Nurul Jannah",
+    hazardType: "Flooding",
+    description: "Road flooded ankle-deep after storm",
+    latitude: 3.0755,
+    longitude: 101.5160,
+    status: "Under Investigation",
+    riskLevel: "High",
+    verificationCount: 1,
+    verifiedBy: ["seed-u1"],
+    createdAt: daysAgo(5),
+    statusUpdatedAt: daysAgo(3),
+    imageUrl: "https://res.cloudinary.com/ditifn5y3/image/upload/w_400,h_300,c_fill/sample/flooding.jpg",
+  },
+  {
+    userId: "seed-u1",
+    reporterName: "Ahmad bin Ali",
+    hazardType: "Debris",
+    description: "Fallen branches blocking right lane",
+    latitude: 3.0710,
+    longitude: 101.5200,
+    status: "Resolved",
+    riskLevel: "Medium",
+    verificationCount: 0,
+    verifiedBy: [],
+    createdAt: daysAgo(30),
+    statusUpdatedAt: daysAgo(20),
+    resolvedBy: "seed-u3",
+    imageUrl: "",
+  },
+  {
+    userId: "seed-u3",
+    reporterName: "Aiman Mohd",
+    hazardType: "Road Crack",
+    description: "Longitudinal crack across both lanes",
+    latitude: 3.0770,
+    longitude: 101.5145,
+    status: "New",
+    riskLevel: "Low",
+    verificationCount: 0,
+    verifiedBy: [],
+    createdAt: daysAgo(1),
+    imageUrl: "",
+  },
+  {
+    userId: "seed-u2",
+    reporterName: "Nurul Jannah",
+    hazardType: "Street Light Issue",
+    description: "Street light out for 3 nights, poor visibility",
+    latitude: 3.0725,
+    longitude: 101.5190,
+    status: "New",
+    riskLevel: "Low",
+    verificationCount: 1,
+    verifiedBy: ["seed-u1"],
+    createdAt: daysAgo(3),
+    imageUrl: "",
+  },
+  {
+    userId: "seed-u1",
+    reporterName: "Ahmad bin Ali",
+    hazardType: "Pothole",
+    description: "Cluster of small potholes after heavy rain",
+    latitude: 3.0742,
+    longitude: 101.5175,
+    status: "Resolved",
+    riskLevel: "Medium",
+    verificationCount: 3,
+    verifiedBy: ["seed-u2", "seed-u3"],
+    createdAt: daysAgo(45),
+    statusUpdatedAt: daysAgo(35),
+    resolvedBy: "seed-u1",
+    imageUrl: "",
+  },
+  {
+    userId: "seed-u3",
+    reporterName: "Aiman Mohd",
+    hazardType: "Other",
+    description: "Construction debris not cleared from roadside",
+    latitude: 3.0760,
+    longitude: 101.5155,
+    status: "Under Investigation",
+    riskLevel: "Critical",
+    verificationCount: 4,
+    verifiedBy: ["seed-u1", "seed-u2"],
+    createdAt: daysAgo(7),
+    statusUpdatedAt: daysAgo(4),
+    imageUrl: "",
+  },
 ];
 
 export default function SeedDataButton() {
@@ -36,13 +166,10 @@ export default function SeedDataButton() {
     try {
       for (const user of SAMPLE_USERS) {
         const { uid, ...rest } = user;
-        await setDoc(doc(db, "users", uid), { ...rest, createdAt: daysAgo(90) });
+        await setDoc(doc(db, "users", uid), rest);
       }
       for (const hazard of SAMPLE_HAZARDS) {
-        await setDoc(doc(collection(db, "hazards")), {
-          ...hazard,
-          updatedAt: hazard.createdAt,
-        });
+        await setDoc(doc(collection(db, "hazards")), hazard);
       }
       setDone(true);
     } catch (err) {

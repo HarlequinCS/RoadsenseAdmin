@@ -1,21 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  collection, onSnapshot, orderBy, query,
-  updateDoc, doc, Timestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { Hazard, HazardStatus } from "@/lib/types";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { db, auth } from "@/lib/firebase";
+import { Hazard, HazardStatus, HAZARD_STATUSES, HAZARD_TYPES, RISK_LEVELS } from "@/lib/types";
 import { formatDate } from "@/lib/style-helpers";
+import { normalizeHazard } from "@/lib/firestore-helpers";
+import { updateHazardStatus, deleteHazard } from "@/lib/hazard-service";
+import RiskBadge from "@/components/RiskBadge";
 import {
   IconSearch, IconEye, IconCheck,
-  IconFilter, IconX, IconDownload, IconPrinter,
-  IconArchive, IconArchiveOff,
+  IconFilter, IconX, IconDownload, IconPrinter, IconTrash,
 } from "@tabler/icons-react";
 
-const STATUS_OPTIONS: HazardStatus[] = ["New", "Under Investigation", "Resolved"];
-const TABS: Array<HazardStatus | "All"> = ["All", "New", "Under Investigation", "Resolved"];
+const TABS: Array<HazardStatus | "All"> = ["All", ...HAZARD_STATUSES];
 
 const STATUS_STYLES: Record<HazardStatus, string> = {
   New: "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400",
@@ -31,7 +30,7 @@ function StatusSelect({ value, onChange }: { value: HazardStatus; onChange: (s: 
       onClick={(e) => e.stopPropagation()}
       className={`no-print text-xs font-medium px-2.5 py-1 rounded-full border-none outline-none cursor-pointer appearance-none ${STATUS_STYLES[value]}`}
     >
-      {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+      {HAZARD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
     </select>
   );
 }
@@ -48,14 +47,16 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 }
 
 function exportToCSV(reports: Hazard[]) {
-  const headers = ["Report ID", "Reporter", "Hazard Type", "Description", "Date", "Status"];
+  const headers = ["Report ID", "Reporter", "Hazard Type", "Risk", "Description", "Date", "Status", "Verifications"];
   const rows = reports.map((r) => [
     r.id,
     r.reporterName || "",
     r.hazardType || "",
+    r.riskLevel || "",
     (r.description || "").replace(/"/g, '""'),
     formatDate(r.createdAt),
     r.status,
+    String(r.verificationCount ?? 0),
   ]);
   const csvContent = [headers, ...rows]
     .map((row) => row.map((field) => `"${field}"`).join(","))
@@ -74,73 +75,63 @@ export default function ReportTable() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<HazardStatus | "All">("All");
   const [typeFilter, setTypeFilter] = useState("All");
+  const [riskFilter, setRiskFilter] = useState("All");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
+  const [adminUser, setAdminUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, setAdminUser);
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const q = query(collection(db, "hazards"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, (snap) => {
-      const rows = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          createdAt: data.createdAt instanceof Timestamp
-            ? data.createdAt.toDate().toISOString()
-            : data.createdAt,
-        } as Hazard;
-      });
-      setReports(rows);
+      setReports(snap.docs.map((d) => normalizeHazard(d.id, d.data())));
       setLoading(false);
     });
     return () => unsub();
   }, []);
 
-  const hazardTypes = useMemo(() => {
-    const types = [...new Set(reports.map((r) => r.hazardType))];
-    return ["All", ...types];
-  }, [reports]);
-
   const filtered = useMemo(() => {
     return reports.filter((r) => {
-      const matchArchived = showArchived ? !!r.archived : !r.archived;
       const matchSearch =
         r.reporterName?.toLowerCase().includes(search.toLowerCase()) ||
         r.hazardType?.toLowerCase().includes(search.toLowerCase()) ||
         r.description?.toLowerCase().includes(search.toLowerCase());
       const matchTab = tab === "All" || r.status === tab;
       const matchType = typeFilter === "All" || r.hazardType === typeFilter;
-      const reportDate = new Date(r.createdAt);
+      const matchRisk = riskFilter === "All" || r.riskLevel === riskFilter;
+      const reportDate = new Date(r.createdAt as string);
       const matchFrom = !dateFrom || reportDate >= new Date(dateFrom);
       const matchTo = !dateTo || reportDate <= new Date(`${dateTo}T23:59:59`);
-      return matchArchived && matchSearch && matchTab && matchType && matchFrom && matchTo;
+      return matchSearch && matchTab && matchType && matchRisk && matchFrom && matchTo;
     });
-  }, [reports, search, tab, typeFilter, dateFrom, dateTo, showArchived]);
-
-  const activeReports = useMemo(() => reports.filter((r) => !r.archived), [reports]);
+  }, [reports, search, tab, typeFilter, riskFilter, dateFrom, dateTo]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { All: activeReports.length };
-    STATUS_OPTIONS.forEach((s) => { c[s] = activeReports.filter((r) => r.status === s).length; });
+    const c: Record<string, number> = { All: reports.length };
+    HAZARD_STATUSES.forEach((s) => { c[s] = reports.filter((r) => r.status === s).length; });
     return c;
-  }, [activeReports]);
+  }, [reports]);
 
-  async function handleStatusChange(id: string, status: HazardStatus) {
-    await updateDoc(doc(db, "hazards", id), { status, updatedAt: new Date().toISOString() });
+  async function handleStatusChange(id: string, status: HazardStatus, userId: string) {
+    if (!adminUser) return;
+    await updateHazardStatus(id, status, adminUser.uid);
+    if (userId) {
+      const { syncUserStats } = await import("@/lib/hazard-service");
+      await syncUserStats(userId);
+    }
     setToast(`Status updated to "${status}"`);
   }
 
-  async function handleArchive(id: string) {
-    await updateDoc(doc(db, "hazards", id), { archived: true, updatedAt: new Date().toISOString() });
-    setToast("Report archived");
-  }
-
-  async function handleUnarchive(id: string) {
-    await updateDoc(doc(db, "hazards", id), { archived: false, updatedAt: new Date().toISOString() });
-    setToast("Report restored");
+  async function handleDelete(id: string, userId: string) {
+    if (!confirm("Delete this hazard report? This cannot be undone.")) return;
+    await deleteHazard(id, userId);
+    setToast("Report deleted");
   }
 
   const tabColors: Record<string, string> = {
@@ -154,7 +145,6 @@ export default function ReportTable() {
     <div>
       {toast && <Toast message={toast} onClose={() => setToast("")} />}
 
-      {/* Status tabs */}
       <div className="no-print flex items-center justify-between mb-4 border-b border-fog-200 dark:border-asphalt-800">
         <div className="flex gap-1">
           {TABS.map((t) => (
@@ -174,20 +164,8 @@ export default function ReportTable() {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowArchived((v) => !v)}
-          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium mb-1 rounded-lg transition-colors ${
-            showArchived
-              ? "bg-asphalt-800 text-white"
-              : "text-fog-400 hover:text-fog-600 dark:hover:text-fog-300"
-          }`}
-        >
-          <IconArchive size={13} />
-          {showArchived ? "Viewing archived" : "Show archived"}
-        </button>
       </div>
 
-      {/* Search + filter */}
       <div className="no-print flex items-center gap-2 mb-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">
           <IconSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fog-400" />
@@ -205,7 +183,16 @@ export default function ReportTable() {
             onChange={(e) => setTypeFilter(e.target.value)}
             className="text-xs rounded-lg border border-fog-200 dark:border-asphalt-700 bg-white dark:bg-asphalt-900 px-2.5 py-2"
           >
-            {hazardTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+            <option value="All">All types</option>
+            {HAZARD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select
+            value={riskFilter}
+            onChange={(e) => setRiskFilter(e.target.value)}
+            className="text-xs rounded-lg border border-fog-200 dark:border-asphalt-700 bg-white dark:bg-asphalt-900 px-2.5 py-2"
+          >
+            <option value="All">All risks</option>
+            {RISK_LEVELS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
         <div className="flex items-center gap-1.5">
@@ -223,9 +210,9 @@ export default function ReportTable() {
             className="text-xs rounded-lg border border-fog-200 dark:border-asphalt-700 bg-white dark:bg-asphalt-900 px-2.5 py-2"
           />
         </div>
-        {(search || typeFilter !== "All" || dateFrom || dateTo) && (
+        {(search || typeFilter !== "All" || riskFilter !== "All" || dateFrom || dateTo) && (
           <button
-            onClick={() => { setSearch(""); setTypeFilter("All"); setDateFrom(""); setDateTo(""); }}
+            onClick={() => { setSearch(""); setTypeFilter("All"); setRiskFilter("All"); setDateFrom(""); setDateTo(""); }}
             className="text-xs text-fog-400 hover:text-fog-600 flex items-center gap-1"
           >
             <IconX size={12} /> Clear
@@ -251,36 +238,35 @@ export default function ReportTable() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="border border-fog-200 dark:border-asphalt-800 rounded-xl overflow-hidden bg-white dark:bg-asphalt-900">
         <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="bg-fog-50 dark:bg-asphalt-800 text-left text-fog-600 dark:text-fog-400 text-xs">
-              <th className="px-4 py-2.5 font-medium w-[10%]">Report ID</th>
-              <th className="px-4 py-2.5 font-medium w-[13%]">Reporter</th>
-              <th className="px-4 py-2.5 font-medium w-[18%]">Hazard type</th>
-              <th className="px-4 py-2.5 font-medium w-[25%]">Description</th>
-              <th className="px-4 py-2.5 font-medium w-[14%]">Date</th>
-              <th className="px-4 py-2.5 font-medium w-[10%]">Status</th>
-              <th className="no-print px-4 py-2.5 font-medium w-[6%] text-right">Act.</th>
+              <th className="px-4 py-2.5 font-medium w-[9%]">ID</th>
+              <th className="px-4 py-2.5 font-medium w-[12%]">Reporter</th>
+              <th className="px-4 py-2.5 font-medium w-[14%]">Type</th>
+              <th className="px-4 py-2.5 font-medium w-[8%]">Risk</th>
+              <th className="px-4 py-2.5 font-medium w-[22%]">Description</th>
+              <th className="px-4 py-2.5 font-medium w-[11%]">Date</th>
+              <th className="px-4 py-2.5 font-medium w-[12%]">Status</th>
+              <th className="no-print px-4 py-2.5 font-medium w-[8%] text-right">Act.</th>
             </tr>
           </thead>
           <tbody>
-            {loading && (
+            {loading &&
               [...Array(4)].map((_, i) => (
                 <tr key={i} className="border-t border-fog-100 dark:border-asphalt-800">
-                  {[...Array(7)].map((_, j) => (
+                  {[...Array(8)].map((_, j) => (
                     <td key={j} className="px-4 py-3">
-                      <div className="h-3 bg-fog-100 dark:bg-asphalt-800 rounded animate-pulse" style={{ width: ["60%", "75%", "55%", "80%", "65%"][j % 5] }} />
+                      <div className="h-3 bg-fog-100 dark:bg-asphalt-800 rounded animate-pulse" style={{ width: `${50 + (j % 3) * 15}%` }} />
                     </td>
                   ))}
                 </tr>
-              ))
-            )}
+              ))}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-fog-400 text-xs">
-                  {showArchived ? "No archived reports" : "No reports match your filters"}
+                <td colSpan={8} className="px-4 py-10 text-center text-fog-400 text-xs">
+                  No reports match your filters
                 </td>
               </tr>
             )}
@@ -289,25 +275,20 @@ export default function ReportTable() {
                 <td className="px-4 py-2.5 text-xs font-mono text-fog-400 truncate">{r.id.slice(0, 8)}</td>
                 <td className="px-4 py-2.5 text-xs font-medium text-asphalt-950 dark:text-fog-100 truncate">{r.reporterName}</td>
                 <td className="px-4 py-2.5 text-xs text-fog-600 dark:text-fog-400 truncate">{r.hazardType}</td>
+                <td className="px-4 py-2.5"><RiskBadge risk={r.riskLevel} /></td>
                 <td className="px-4 py-2.5 text-xs text-fog-400 truncate">{r.description || "—"}</td>
                 <td className="px-4 py-2.5 text-xs text-fog-400">{formatDate(r.createdAt)}</td>
                 <td className="px-4 py-2.5">
-                  <StatusSelect value={r.status} onChange={(s) => handleStatusChange(r.id, s)} />
+                  <StatusSelect value={r.status} onChange={(s) => handleStatusChange(r.id, s, r.userId)} />
                 </td>
                 <td className="no-print px-4 py-2.5">
                   <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <a href={`/reports/${r.id}`} aria-label="View" className="hover:text-signal-blue-500 transition-colors">
                       <IconEye size={15} className="text-fog-400" />
                     </a>
-                    {r.archived ? (
-                      <button onClick={() => handleUnarchive(r.id)} aria-label="Unarchive" className="hover:text-signal-teal-500 transition-colors">
-                        <IconArchiveOff size={15} className="text-fog-400" />
-                      </button>
-                    ) : (
-                      <button onClick={() => handleArchive(r.id)} aria-label="Archive" className="hover:text-amber-500 transition-colors">
-                        <IconArchive size={15} className="text-fog-400" />
-                      </button>
-                    )}
+                    <button onClick={() => handleDelete(r.id, r.userId)} aria-label="Delete" className="hover:text-signal-red-500 transition-colors">
+                      <IconTrash size={15} className="text-fog-400" />
+                    </button>
                   </div>
                 </td>
               </tr>

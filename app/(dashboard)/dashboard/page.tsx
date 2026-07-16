@@ -6,8 +6,11 @@ import Link from "next/link";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { DashboardStats, Hazard } from "@/lib/types";
-import { formatDate, hazardTypeColors, statusChartColors } from "@/lib/style-helpers";
+import { formatDate, getHazardTypeColor, riskChartColors } from "@/lib/style-helpers";
+import { normalizeHazard } from "@/lib/firestore-helpers";
+import { isActiveHazard, countActiveHighCritical } from "@/lib/hazard-utils";
 import StatusBadge from "@/components/StatusBadge";
+import RiskBadge from "@/components/RiskBadge";
 import StatCard from "@/components/StatCard";
 import SeedDataButton from "@/components/SeedDataButton";
 import {
@@ -16,7 +19,7 @@ import {
 } from "recharts";
 import {
   IconUsers, IconFileText, IconAlertCircle, IconCircleCheck,
-  IconRefresh, IconArrowRight,
+  IconRefresh, IconArrowRight, IconSearch, IconFlame,
 } from "@tabler/icons-react";
 
 const HazardMap = dynamic(() => import("@/components/HazardMap"), {
@@ -43,7 +46,15 @@ function ChartTooltip({ active, payload, label }: TooltipProps) {
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>({ totalUsers: 0, totalReports: 0, newReports: 0, resolvedReports: 0 });
+  const [stats, setStats] = useState<DashboardStats>({
+    totalUsers: 0,
+    totalReports: 0,
+    activeHazards: 0,
+    newReports: 0,
+    underInvestigation: 0,
+    resolvedReports: 0,
+    highCriticalActive: 0,
+  });
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [search, setSearch] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -54,29 +65,35 @@ export default function DashboardPage() {
       setStats((s) => ({ ...s, totalUsers: snap.size }));
     });
     const unsubHazards = onSnapshot(collection(db, "hazards"), (snap) => {
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Hazard));
+      const all = snap.docs.map((d) => normalizeHazard(d.id, d.data()));
       setHazards(all);
       setStats((s) => ({
         ...s,
         totalReports: all.length,
+        activeHazards: all.filter(isActiveHazard).length,
         newReports: all.filter((h) => h.status === "New").length,
+        underInvestigation: all.filter((h) => h.status === "Under Investigation").length,
         resolvedReports: all.filter((h) => h.status === "Resolved").length,
+        highCriticalActive: countActiveHighCritical(all),
       }));
       setLastUpdated(new Date());
     });
     return () => { unsubUsers(); unsubHazards(); };
   }, []);
 
+  const activeHazards = hazards.filter(isActiveHazard);
+
   const byType = Object.entries(
     hazards.reduce((acc, h) => { acc[h.hazardType] = (acc[h.hazardType] || 0) + 1; return acc; }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
-  const byStatus = Object.entries(
-    hazards.reduce((acc, h) => { acc[h.status] = (acc[h.status] || 0) + 1; return acc; }, {} as Record<string, number>)
+  const byRisk = Object.entries(
+    activeHazards.reduce((acc, h) => { acc[h.riskLevel] = (acc[h.riskLevel] || 0) + 1; return acc; }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value }));
 
   const recent = [...hazards]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .sort((a, b) => new Date(a.createdAt as string).getTime() - new Date(b.createdAt as string).getTime())
+    .reverse()
     .slice(0, 6);
 
   const filtered = recent.filter(
@@ -92,7 +109,6 @@ export default function DashboardPage() {
 
   return (
     <div>
-      {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[11px] font-semibold tracking-widest text-amber-600 uppercase mb-1.5">
@@ -119,26 +135,36 @@ export default function DashboardPage() {
 
       <div className="lane-divider w-full mb-6" />
 
-      {/* Stat cards */}
       <div className="grid grid-cols-4 gap-3.5 mb-7">
-        <StatCard label="Total users" value={stats.totalUsers} icon={<IconUsers size={16} />} tone="info" delta="+12%" animate />
-        <StatCard label="Total reports" value={stats.totalReports} icon={<IconFileText size={16} />} tone="default" animate />
-        <StatCard label="New reports" value={stats.newReports} icon={<IconAlertCircle size={16} />} tone="warning" delta="Active" animate />
-        <StatCard label="Resolved" value={stats.resolvedReports} icon={<IconCircleCheck size={16} />} tone="success" delta="90%" animate />
+        <StatCard label="Total users" value={stats.totalUsers} icon={<IconUsers size={16} />} tone="info" animate />
+        <StatCard label="Active hazards" value={stats.activeHazards} icon={<IconAlertCircle size={16} />} tone="warning" animate />
+        <StatCard label="Under investigation" value={stats.underInvestigation} icon={<IconFileText size={16} />} tone="default" animate />
+        <StatCard label="High / Critical" value={stats.highCriticalActive} icon={<IconFlame size={16} />} tone="danger" animate />
       </div>
 
-      {/* Charts row */}
+      <div className="grid grid-cols-4 gap-3.5 mb-7">
+        <StatCard label="Total reports" value={stats.totalReports} icon={<IconFileText size={16} />} tone="default" animate />
+        <StatCard label="New reports" value={stats.newReports} icon={<IconAlertCircle size={16} />} tone="warning" animate />
+        <StatCard label="Resolved" value={stats.resolvedReports} icon={<IconCircleCheck size={16} />} tone="success" animate />
+        <StatCard
+          label="Resolve rate"
+          value={stats.totalReports ? `${Math.round((stats.resolvedReports / stats.totalReports) * 100)}%` : "0%"}
+          icon={<IconCircleCheck size={16} />}
+          tone="success"
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-4 mb-7">
         <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4">
           <p className="font-display font-medium text-sm mb-3 text-asphalt-950 dark:text-fog-50">Reports by hazard type</p>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={byType} barSize={28}>
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
               <Tooltip content={<ChartTooltip />} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                 {byType.map((entry) => (
-                  <Cell key={entry.name} fill={hazardTypeColors[entry.name as keyof typeof hazardTypeColors] || "#888"} />
+                  <Cell key={entry.name} fill={getHazardTypeColor(entry.name)} />
                 ))}
               </Bar>
             </BarChart>
@@ -146,12 +172,12 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4">
-          <p className="font-display font-medium text-sm mb-3 text-asphalt-950 dark:text-fog-50">Reports by status</p>
+          <p className="font-display font-medium text-sm mb-3 text-asphalt-950 dark:text-fog-50">Active hazards by risk</p>
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
-              <Pie data={byStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3}>
-                {byStatus.map((entry) => (
-                  <Cell key={entry.name} fill={statusChartColors[entry.name as keyof typeof statusChartColors] || "#ccc"} />
+              <Pie data={byRisk} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3}>
+                {byRisk.map((entry) => (
+                  <Cell key={entry.name} fill={riskChartColors[entry.name as keyof typeof riskChartColors] || "#ccc"} />
                 ))}
               </Pie>
               <Tooltip content={<ChartTooltip />} />
@@ -161,36 +187,39 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Hazard map */}
       <div className="bg-white dark:bg-asphalt-900 border border-fog-200 dark:border-asphalt-800 rounded-xl p-4 mb-7">
         <div className="flex items-center justify-between mb-3">
-          <p className="font-display font-medium text-sm text-asphalt-950 dark:text-fog-50">Hazard map</p>
-          <div className="flex items-center gap-3 text-[11px] text-fog-600 dark:text-fog-400">
-            {(["New", "Under Investigation", "Resolved"] as const).map((s) => (
-              <span key={s} className="flex items-center gap-1.5">
-                <span
-                  className="w-2 h-2 rounded-full inline-block"
-                  style={{ backgroundColor: statusChartColors[s] }}
-                />
-                {s}
-              </span>
-            ))}
+          <p className="font-display font-medium text-sm text-asphalt-950 dark:text-fog-50">Active hazard map</p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 text-[11px] text-fog-600 dark:text-fog-400">
+              {(["Low", "Medium", "High", "Critical"] as const).map((r) => (
+                <span key={r} className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: riskChartColors[r] }} />
+                  {r}
+                </span>
+              ))}
+            </div>
+            <Link href="/map" className="text-xs text-amber-600 dark:text-amber-400 hover:underline">
+              Full map →
+            </Link>
           </div>
         </div>
-        <HazardMap hazards={hazards} />
+        <HazardMap hazards={hazards} activeOnly colorBy="risk" />
       </div>
 
-      {/* Recent reports table */}
       <div>
         <div className="flex items-center justify-between mb-2.5">
           <p className="font-display font-medium text-sm text-asphalt-950 dark:text-fog-50">Recent reports</p>
           <div className="flex items-center gap-2">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search…"
-              className="text-xs rounded-lg border border-fog-200 dark:border-asphalt-700 px-2.5 py-1.5 w-36 bg-white dark:bg-asphalt-900"
-            />
+            <div className="relative">
+              <IconSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fog-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search…"
+                className="text-xs rounded-lg border border-fog-200 dark:border-asphalt-700 pl-8 pr-2.5 py-1.5 w-36 bg-white dark:bg-asphalt-900"
+              />
+            </div>
             <Link href="/reports" className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline">
               View all <IconArrowRight size={12} />
             </Link>
@@ -203,13 +232,14 @@ export default function DashboardPage() {
               <tr className="bg-fog-50 dark:bg-asphalt-800 text-left text-fog-600 dark:text-fog-400 text-xs">
                 <th className="px-4 py-2.5 font-medium">Reporter</th>
                 <th className="px-4 py-2.5 font-medium">Hazard</th>
+                <th className="px-4 py-2.5 font-medium">Risk</th>
                 <th className="px-4 py-2.5 font-medium">Date</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-fog-400 text-xs">No reports found</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-fog-400 text-xs">No reports found</td></tr>
               )}
               {filtered.map((r) => (
                 <tr
@@ -219,6 +249,7 @@ export default function DashboardPage() {
                 >
                   <td className="px-4 py-2.5 font-medium text-xs text-asphalt-950 dark:text-fog-100">{r.reporterName}</td>
                   <td className="px-4 py-2.5 text-xs text-fog-600 dark:text-fog-400">{r.hazardType}</td>
+                  <td className="px-4 py-2.5"><RiskBadge risk={r.riskLevel} /></td>
                   <td className="px-4 py-2.5 text-xs text-fog-400">{formatDate(r.createdAt)}</td>
                   <td className="px-4 py-2.5"><StatusBadge status={r.status} /></td>
                 </tr>

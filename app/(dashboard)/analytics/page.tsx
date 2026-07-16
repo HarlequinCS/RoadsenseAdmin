@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Hazard } from "@/lib/types";
-import { hazardTypeColors, statusChartColors, toDate } from "@/lib/style-helpers";
+import { statusChartColors, riskChartColors, toDate, getHazardTypeColor } from "@/lib/style-helpers";
+import { normalizeHazard } from "@/lib/firestore-helpers";
+import { isActiveHazard, countActiveHighCritical } from "@/lib/hazard-utils";
 import StatCard from "@/components/StatCard";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -13,6 +16,7 @@ import {
 } from "recharts";
 import {
   IconFileText, IconCircleCheck, IconAlertTriangle, IconCalendarStats,
+  IconFlame, IconSearch,
 } from "@tabler/icons-react";
 
 interface TooltipProps {
@@ -46,11 +50,13 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "hazards"), (snap) => {
-      setHazards(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Hazard)));
+      setHazards(snap.docs.map((d) => normalizeHazard(d.id, d.data())));
       setLoading(false);
     });
     return () => unsub();
   }, []);
+
+  const activeHazards = hazards.filter(isActiveHazard);
 
   const byType = useMemo(() => {
     const acc: Record<string, number> = {};
@@ -63,6 +69,12 @@ export default function AnalyticsPage() {
     hazards.forEach((h) => { acc[h.status] = (acc[h.status] || 0) + 1; });
     return Object.entries(acc).map(([name, value]) => ({ name, value }));
   }, [hazards]);
+
+  const byRisk = useMemo(() => {
+    const acc: Record<string, number> = {};
+    activeHazards.forEach((h) => { acc[h.riskLevel] = (acc[h.riskLevel] || 0) + 1; });
+    return Object.entries(acc).map(([name, value]) => ({ name, value }));
+  }, [activeHazards]);
 
   const monthlyTrend = useMemo(() => {
     const months: Record<string, number> = {};
@@ -107,50 +119,27 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      {/* Header */}
       <div className="mb-6">
-        <p className="text-[11px] font-semibold tracking-widest text-amber-600 uppercase mb-1.5">
-          Insights
-        </p>
-        <h1 className="font-display font-semibold text-[26px] text-asphalt-950 dark:text-fog-50 tracking-tight">
-          Analytics
-        </h1>
-        <p className="text-xs text-fog-600 dark:text-fog-400 mt-1">
-          Report trends and breakdown across all hazard data
-        </p>
+        <p className="text-[11px] font-semibold tracking-widest text-amber-600 uppercase mb-1.5">Insights</p>
+        <h1 className="font-display font-semibold text-[26px] text-asphalt-950 dark:text-fog-50 tracking-tight">Analytics</h1>
+        <p className="text-xs text-fog-600 dark:text-fog-400 mt-1">Report trends and breakdown across all hazard data</p>
       </div>
       <div className="lane-divider w-full mb-6" />
 
-      {/* Summary row */}
       <div className="grid grid-cols-4 gap-3.5 mb-7">
-        <StatCard
-          label="Total reports"
-          value={hazards.length}
-          icon={<IconFileText size={16} />}
-          tone="info"
-        />
-        <StatCard
-          label="Resolve rate"
-          value={`${resolveRate}%`}
-          icon={<IconCircleCheck size={16} />}
-          tone="success"
-        />
-        <StatCard
-          label="Most common hazard"
-          value={mostCommon}
-          icon={<IconAlertTriangle size={16} />}
-          tone="warning"
-        />
-        <StatCard
-          label="Reports this month"
-          value={thisMonth}
-          icon={<IconCalendarStats size={16} />}
-          tone="default"
-          animate
-        />
+        <StatCard label="Total reports" value={hazards.length} icon={<IconFileText size={16} />} tone="info" animate />
+        <StatCard label="Active hazards" value={activeHazards.length} icon={<IconAlertTriangle size={16} />} tone="warning" animate />
+        <StatCard label="High / Critical active" value={countActiveHighCritical(hazards)} icon={<IconFlame size={16} />} tone="danger" animate />
+        <StatCard label="Reports this month" value={thisMonth} icon={<IconCalendarStats size={16} />} tone="default" animate />
       </div>
 
-      {/* Charts grid */}
+      <div className="grid grid-cols-4 gap-3.5 mb-7">
+        <StatCard label="Resolve rate" value={`${resolveRate}%`} icon={<IconCircleCheck size={16} />} tone="success" />
+        <StatCard label="Most common hazard" value={mostCommon} icon={<IconAlertTriangle size={16} />} tone="warning" />
+        <StatCard label="Under investigation" value={hazards.filter((h) => h.status === "Under Investigation").length} icon={<IconSearch size={16} />} tone="default" />
+        <StatCard label="New reports" value={hazards.filter((h) => h.status === "New").length} icon={<IconFileText size={16} />} tone="info" />
+      </div>
+
       <div className="grid grid-cols-2 gap-4 mb-4">
         <ChartCard title="Reports by hazard type">
           <ResponsiveContainer width="100%" height={200}>
@@ -160,7 +149,7 @@ export default function AnalyticsPage() {
               <Tooltip content={<ChartTooltip />} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                 {byType.map((entry) => (
-                  <Cell key={entry.name} fill={hazardTypeColors[entry.name as keyof typeof hazardTypeColors] || "#888"} />
+                  <Cell key={entry.name} fill={getHazardTypeColor(entry.name)} />
                 ))}
               </Bar>
             </BarChart>
@@ -170,18 +159,8 @@ export default function AnalyticsPage() {
         <ChartCard title="Reports by status">
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie
-                data={byStatus}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={75}
-                paddingAngle={3}
-                label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
-                labelLine={false}
-              >
+              <Pie data={byStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3}
+                label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`} labelLine={false}>
                 {byStatus.map((entry) => (
                   <Cell key={entry.name} fill={statusChartColors[entry.name as keyof typeof statusChartColors] || "#ccc"} />
                 ))}
@@ -193,28 +172,35 @@ export default function AnalyticsPage() {
         </ChartCard>
       </div>
 
-      {/* Line — monthly trend (full width) */}
-      <ChartCard title="Monthly report trend (last 6 months)">
-        <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={monthlyTrend} margin={{ top: 0, right: 12, bottom: 0, left: -20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-            <Tooltip content={<ChartTooltip />} />
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="#EF9F27"
-              strokeWidth={2.5}
-              dot={{ r: 4, fill: "#EF9F27", strokeWidth: 0 }}
-              activeDot={{ r: 6 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </ChartCard>
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <ChartCard title="Active hazards by risk level">
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={byRisk} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3}>
+                {byRisk.map((entry) => (
+                  <Cell key={entry.name} fill={riskChartColors[entry.name as keyof typeof riskChartColors] || "#ccc"} />
+                ))}
+              </Pie>
+              <Tooltip content={<ChartTooltip />} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-      {/* Breakdown table */}
-      <div className="mt-4 border border-fog-200 dark:border-asphalt-800 bg-white dark:bg-asphalt-900 rounded-xl overflow-hidden">
+        <ChartCard title="Monthly report trend (last 6 months)">
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={monthlyTrend} margin={{ top: 0, right: 12, bottom: 0, left: -20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+              <Tooltip content={<ChartTooltip />} />
+              <Line type="monotone" dataKey="value" stroke="#009EE3" strokeWidth={2.5} dot={{ r: 4, fill: "#009EE3", strokeWidth: 0 }} activeDot={{ r: 6 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      <div className="border border-fog-200 dark:border-asphalt-800 bg-white dark:bg-asphalt-900 rounded-xl overflow-hidden">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-fog-50 dark:bg-asphalt-800 text-fog-600 dark:text-fog-400 text-left">
@@ -226,15 +212,11 @@ export default function AnalyticsPage() {
           </thead>
           <tbody>
             {byType.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-fog-400 text-xs">
-                  No hazard data yet
-                </td>
-              </tr>
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-fog-400 text-xs">No hazard data yet</td></tr>
             )}
             {byType.map((row) => {
               const pct = hazards.length ? Math.round((row.value / hazards.length) * 100) : 0;
-              const color = hazardTypeColors[row.name as keyof typeof hazardTypeColors] || "#888";
+              const color = getHazardTypeColor(row.name);
               return (
                 <tr key={row.name} className="border-t border-fog-100 dark:border-asphalt-800">
                   <td className="px-4 py-2.5 flex items-center gap-2 text-asphalt-950 dark:text-fog-100">

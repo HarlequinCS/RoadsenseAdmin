@@ -1,6 +1,6 @@
 # RoadSense Admin Dashboard
 
-Web-based administrative dashboard for the RoadSense road hazard reporting system.
+Web-based administrative dashboard for the RoadSense road hazard reporting system, integrated with the same Firebase backend as the [RoadSense Android app](https://github.com/HarlequinCS/RoadSense).
 
 Built with Next.js, TypeScript, Tailwind CSS, Firebase, and Recharts.
 
@@ -12,11 +12,13 @@ Built with Next.js, TypeScript, Tailwind CSS, Firebase, and Recharts.
 |---|---|
 | `/` | Landing page |
 | `/about` | About the project |
-| `/login` | Admin sign in |
-| `/dashboard` | Overview — stats and charts |
-| `/reports` | Manage hazard reports |
-| `/users` | View registered users |
-| `/analytics` | Report trends and breakdown |
+| `/login` | Admin sign in (requires `admin` custom claim) |
+| `/dashboard` | Overview — stats, charts, active hazard map |
+| `/reports` | Manage hazard reports (filter, status, delete, CSV export) |
+| `/reports/[id]` | Hazard detail — photo, reporter profile, admin notes |
+| `/map` | Full-screen hazard map (active hazards, colour by risk/status) |
+| `/users` | Registered users, contributor badges, per-user reports |
+| `/analytics` | Report trends, risk breakdown, monthly charts |
 
 ---
 
@@ -35,20 +37,41 @@ cd roadsense-admin
 npm install
 ```
 
-### 3. Create `.env.local`
+### 3. Configure environment
 
-Create a file named `.env.local` in the root folder and fill in the Firebase credentials (get from a team member — do not commit this file):
+Copy `.env.example` to `.env.local` and fill in values:
 
-```
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
+```bash
+cp .env.example .env.local
 ```
 
-### 4. Run the app
+Required variables:
+
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_*` | Firebase Web SDK (project: `roadsense-2bbad`) |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Hazard map page |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Hazard photo thumbnails (`ditifn5y3`) |
+
+For local development without admin custom claims set up yet:
+
+```
+NEXT_PUBLIC_SKIP_ADMIN_CHECK=true
+```
+
+### 4. Firebase setup
+
+1. Register a **Web app** in Firebase Console → Project `roadsense-2bbad` → copy `appId` into `.env.local`
+2. Create dedicated **admin accounts** under Authentication → Users
+3. Set admin custom claim via Firebase Admin SDK:
+
+```javascript
+await admin.auth().setCustomUserClaims(adminUid, { admin: true });
+```
+
+4. Add your admin domain to Authentication → Settings → Authorized domains
+
+### 5. Run the app
 
 ```bash
 npm run dev
@@ -58,17 +81,46 @@ Open `http://localhost:3000` in your browser.
 
 ---
 
+## Data model
+
+The dashboard reads/writes the same Firestore collections as the mobile app:
+
+- **`users`** — profile, stats (`totalReports`, `resolvedReports`, `contributorBadge`, `fcmToken`)
+- **`hazards`** — reports with `hazardType`, `riskLevel`, `status`, `verificationCount`, `imageUrl` (Cloudinary)
+
+### Hazard types (mobile app)
+
+`Pothole`, `Road Crack`, `Flooding`, `Debris`, `Street Light Issue`, `Other`
+
+### Status values
+
+| Status | Set by |
+|---|---|
+| `New` | Mobile app on submit |
+| `Under Investigation` | **Admin only** |
+| `Resolved` | Mobile app or admin |
+
+### Admin write operations
+
+- Set status to **Under Investigation** (primary admin action)
+- Resolve hazard (updates `statusUpdatedAt`, `resolvedBy`, recalculates user stats)
+- Delete hazard (admin only)
+- Add **admin notes** (`adminNotes`, `adminUpdatedBy`)
+
+---
+
 ## Login
 
-Use the admin account credentials shared privately by the team. Do not commit login credentials to this repo.
+Use a dedicated admin Firebase Auth account with the `{ admin: true }` custom claim. Do not promote regular mobile app users to admin.
 
 ---
 
 ## Tech Stack
 
 - Next.js 16 + TypeScript
-- Tailwind CSS
-- Firebase Authentication + Firestore
+- Tailwind CSS v4
+- Firebase Authentication + Firestore (client SDK)
+- Google Maps (`@react-google-maps/api`)
 - Recharts
 - Tabler Icons
 
@@ -77,3 +129,7 @@ Use the admin account credentials shared privately by the team. Do not commit lo
 ## Project
 
 ICT602 Mobile Technology Group Project — RoadSense
+
+**Team:** Muhammad Saiful Iqbal Abdul Rani, Nurul Jannah Idris, Siti Alya Hanisah Latif, Muhammad Aiman Mohd Nazri
+
+**Mobile repo:** https://github.com/HarlequinCS/RoadSense

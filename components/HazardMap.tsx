@@ -3,26 +3,27 @@
 import { useState, useCallback } from "react";
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from "@react-google-maps/api";
 import { Hazard } from "@/lib/types";
-import { statusChartColors } from "@/lib/style-helpers";
+import { riskChartColors, statusChartColors } from "@/lib/style-helpers";
 import StatusBadge from "./StatusBadge";
+import RiskBadge from "./RiskBadge";
 
-const DEFAULT_CENTER = { lat: 2.1896, lng: 102.2501 };
+const DEFAULT_CENTER = { lat: 3.0738, lng: 101.5183 };
 
-const containerStyle = {
-  width: "100%",
-  height: "320px",
-  borderRadius: "8px",
-};
+type ColorMode = "status" | "risk";
 
-const mapOptions: google.maps.MapOptions = {
-  disableDefaultUI: false,
-  zoomControl: true,
-  streetViewControl: false,
-  mapTypeControl: false,
-  fullscreenControl: true,
-};
+interface HazardMapProps {
+  hazards: Hazard[];
+  activeOnly?: boolean;
+  colorBy?: ColorMode;
+  height?: number;
+}
 
-export default function HazardMap({ hazards }: { hazards: Hazard[] }) {
+export default function HazardMap({
+  hazards,
+  activeOnly = false,
+  colorBy = "status",
+  height = 320,
+}: HazardMapProps) {
   const { isLoaded } = useJsApiLoader({
     id: "roadsense-google-map",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
@@ -30,33 +31,76 @@ export default function HazardMap({ hazards }: { hazards: Hazard[] }) {
 
   const [selected, setSelected] = useState<Hazard | null>(null);
 
-  const validHazards = hazards.filter(
-    (h) => typeof h.latitude === "number" && typeof h.longitude === "number"
-  );
+  const visibleHazards = hazards
+    .filter((h) => (activeOnly ? h.status !== "Resolved" : true))
+    .filter((h) => typeof h.latitude === "number" && typeof h.longitude === "number");
 
   const center =
-    validHazards.length > 0
+    visibleHazards.length > 0
       ? {
-          lat: validHazards.reduce((sum, h) => sum + h.latitude, 0) / validHazards.length,
-          lng: validHazards.reduce((sum, h) => sum + h.longitude, 0) / validHazards.length,
+          lat: visibleHazards.reduce((sum, h) => sum + h.latitude, 0) / visibleHazards.length,
+          lng: visibleHazards.reduce((sum, h) => sum + h.longitude, 0) / visibleHazards.length,
         }
       : DEFAULT_CENTER;
 
-  const getIcon = useCallback((status: Hazard["status"]) => {
-    if (typeof window === "undefined" || !window.google) return undefined;
-    return {
-      path: window.google.maps.SymbolPath.CIRCLE,
-      fillColor: statusChartColors[status] || "#888",
-      fillOpacity: 0.9,
-      strokeColor: "#ffffff",
-      strokeWeight: 2,
-      scale: 9,
-    };
-  }, []);
+  const getColor = useCallback(
+    (hazard: Hazard) => {
+      if (colorBy === "risk") {
+        return riskChartColors[hazard.riskLevel as keyof typeof riskChartColors] || "#888";
+      }
+      return statusChartColors[hazard.status] || "#888";
+    },
+    [colorBy]
+  );
+
+  const getIcon = useCallback(
+    (hazard: Hazard) => {
+      if (typeof window === "undefined" || !window.google) return undefined;
+      return {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        fillColor: getColor(hazard),
+        fillOpacity: 0.9,
+        strokeColor: "#ffffff",
+        strokeWeight: 2,
+        scale: hazard.riskLevel === "Critical" ? 11 : 9,
+      };
+    },
+    [getColor]
+  );
+
+  const containerStyle = {
+    width: "100%",
+    height: `${height}px`,
+    borderRadius: "8px",
+  };
+
+  const mapOptions: google.maps.MapOptions = {
+    disableDefaultUI: false,
+    zoomControl: true,
+    streetViewControl: false,
+    mapTypeControl: false,
+    fullscreenControl: true,
+  };
+
+  if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+    return (
+      <div
+        className="rounded-lg bg-fog-100 dark:bg-asphalt-800 flex items-center justify-center border border-fog-200 dark:border-asphalt-700"
+        style={{ height }}
+      >
+        <p className="text-xs text-fog-400 px-4 text-center">
+          Set <code className="text-[10px]">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in .env.local to enable the map.
+        </p>
+      </div>
+    );
+  }
 
   if (!isLoaded) {
     return (
-      <div className="h-[320px] rounded-lg bg-fog-100 dark:bg-asphalt-800 animate-pulse flex items-center justify-center">
+      <div
+        className="rounded-lg bg-fog-100 dark:bg-asphalt-800 animate-pulse flex items-center justify-center"
+        style={{ height }}
+      >
         <p className="text-xs text-fog-400">Loading map…</p>
       </div>
     );
@@ -64,17 +108,12 @@ export default function HazardMap({ hazards }: { hazards: Hazard[] }) {
 
   return (
     <div className="rounded-lg overflow-hidden border border-fog-200 dark:border-asphalt-700">
-      <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={center}
-        zoom={12}
-        options={mapOptions}
-      >
-        {validHazards.map((h) => (
+      <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={12} options={mapOptions}>
+        {visibleHazards.map((h) => (
           <MarkerF
             key={h.id}
             position={{ lat: h.latitude, lng: h.longitude }}
-            icon={getIcon(h.status)}
+            icon={getIcon(h)}
             onClick={() => setSelected(h)}
           />
         ))}
@@ -84,10 +123,19 @@ export default function HazardMap({ hazards }: { hazards: Hazard[] }) {
             position={{ lat: selected.latitude, lng: selected.longitude }}
             onCloseClick={() => setSelected(null)}
           >
-            <div style={{ fontSize: "13px", lineHeight: 1.5, minWidth: "140px" }}>
+            <div style={{ fontSize: "13px", lineHeight: 1.5, minWidth: "160px" }}>
               <p style={{ fontWeight: 600, margin: 0 }}>{selected.hazardType}</p>
               <p style={{ margin: "2px 0 6px", color: "#5C5A56" }}>{selected.reporterName}</p>
-              <StatusBadge status={selected.status} />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <StatusBadge status={selected.status} />
+                <RiskBadge risk={selected.riskLevel} />
+              </div>
+              <a
+                href={`/reports/${selected.id}`}
+                style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "#009EE3" }}
+              >
+                View report →
+              </a>
             </div>
           </InfoWindowF>
         )}
